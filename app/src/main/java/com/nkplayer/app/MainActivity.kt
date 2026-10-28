@@ -297,9 +297,11 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                         MediaList(filtered, selected, accent) { playTrack(it, filtered, player); selected = it }
                     }
                     else -> {
-                        Text("PLAYER STUDIO", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text("Choose an accent theme. Your choice is saved.", color = Color.LightGray, fontSize = 12.sp)
-                        Spacer(Modifier.height(12.dp))
+                        StudioHeader(accent = accent, themeName = themeName)
+                        Spacer(Modifier.height(14.dp))
+                        Text("ACCENT THEMES", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                        Text("Choose a look that feels like yours.", color = Color.Gray, fontSize = 11.sp)
+                        Spacer(Modifier.height(10.dp))
                         listOf("Neon Blue", "Cyber Purple", "Emerald Green", "Crimson Red", "Golden Amber").forEach { name ->
                             val swatch = when (name) {
                                 "Cyber Purple" -> Violet
@@ -308,21 +310,32 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 "Golden Amber" -> Color(0xFFFFC45C)
                                 else -> Cyan
                             }
-                            Surface(color = if (themeName == name) Color(0xFF1C2B3D) else Panel,
-                                shape = RoundedCornerShape(15.dp),
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clickable { themeName = name }) {
-                                Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(color = swatch, shape = RoundedCornerShape(50), modifier = Modifier.size(14.dp)) {}
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(name, color = Color.White, modifier = Modifier.weight(1f))
-                                    if (themeName == name) Icon(Icons.Default.CheckCircle, null, tint = swatch)
+                            ThemeOptionCard(
+                                name = name,
+                                swatch = swatch,
+                                selected = themeName == name,
+                                onClick = { themeName = name }
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Surface(color = Panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.GraphicEq, null, tint = accent, modifier = Modifier.size(28.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("AUDIO EFFECTS", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                    Text("Equalizer and sound effects are planned for a future update.",
+                                        color = Color.Gray, fontSize = 10.sp, lineHeight = 14.sp)
+                                }
+                                Surface(color = accent.copy(alpha = 0.12f), shape = RoundedCornerShape(9.dp)) {
+                                    Text("SOON", color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
                                 }
                             }
                         }
-                        Text("Background playback, equalizer and subtitle timing are still planned.", color = Color.Gray, fontSize = 11.sp)
                     }
-                }
-                selected?.let { track ->
+                                selected?.let { track ->
                     Spacer(Modifier.height(8.dp))
                     Surface(color = Panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp)) {
@@ -474,6 +487,67 @@ private fun playTrack(track: Track, queue: List<Track>, player: Player) {
 }
 
 
+
+
+@Composable
+private fun StudioHeader(accent: Color, themeName: String) {
+    Surface(color = Panel, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.background(Brush.linearGradient(listOf(Color(0xFF1A2940), Color(0xFF211B39), Color(0xFF111827))))
+                .padding(17.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(color = accent.copy(alpha = 0.15f), shape = RoundedCornerShape(16.dp), modifier = Modifier.size(54.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Tune, null, tint = accent, modifier = Modifier.size(30.dp))
+                }
+            }
+            Spacer(Modifier.width(13.dp))
+            Column(Modifier.weight(1f)) {
+                Text("PLAYER STUDIO", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
+                Spacer(Modifier.height(3.dp))
+                Text("PERSONALISE YOUR PLAYER", color = accent, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(7.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(color = accent, shape = RoundedCornerShape(50), modifier = Modifier.size(7.dp)) {}
+                    Spacer(Modifier.width(6.dp))
+                    Text("Active: $themeName", color = Color.LightGray, fontSize = 10.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemeOptionCard(name: String, swatch: Color, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        color = if (selected) swatch.copy(alpha = 0.12f) else Panel,
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (selected) 1.5.dp else 1.dp,
+            color = if (selected) swatch.copy(alpha = 0.85f) else Color(0xFF263247)
+        ),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(color = swatch, shape = RoundedCornerShape(9.dp), modifier = Modifier.size(36.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Waves, null, tint = Ink, modifier = Modifier.size(20.dp))
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, color = Color.White, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = 13.sp)
+                Text(if (selected) "Currently active" else "Tap to apply this accent", color = Color.Gray, fontSize = 10.sp)
+            }
+            if (selected) {
+                Icon(Icons.Default.CheckCircle, null, tint = swatch, modifier = Modifier.size(22.dp))
+            } else {
+                Icon(Icons.Default.ChevronRight, null, tint = Color.Gray)
+            }
+        }
+    }
+}
 
 @Composable
 private fun LibraryTabHeader(
