@@ -293,7 +293,10 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
 
     MaterialTheme(colorScheme = darkColorScheme(primary = accent, secondary = Violet, background = Ink, surface = Panel)) {
         Scaffold(containerColor = Ink, bottomBar = {
-            NavigationBar(containerColor = Panel) {
+            NavigationBar(
+                containerColor = Color(0xFF0E1522),
+                tonalElevation = 0.dp
+            ) {
                 listOf("Home", "Audio", "Video", "Studio").forEachIndexed { index, label ->
                     NavigationBarItem(
                         selected = tab == index,
@@ -306,7 +309,14 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 else -> Icons.Default.Tune
                             }, contentDescription = label)
                         },
-                        label = { Text(label) }
+                        label = { Text(label, fontWeight = if (tab == index) FontWeight.Bold else FontWeight.Medium) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = accent,
+                            selectedTextColor = accent,
+                            indicatorColor = accent.copy(alpha = 0.13f),
+                            unselectedIconColor = Color(0xFF8492A7),
+                            unselectedTextColor = Color(0xFF8492A7)
+                        )
                     )
                 }
             }
@@ -316,19 +326,41 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                     .background(Brush.verticalGradient(listOf(Ink, Color(0xFF0C1424), Ink)))
                     .padding(horizontal = 18.dp)
             ) {
-                Spacer(Modifier.height(20.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("NK PLAYER", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
-                        Text("PLAY WITHOUT LIMITS", color = accent, fontSize = 10.sp, letterSpacing = 2.sp)
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = accent.copy(alpha = 0.11f),
+                        shape = RoundedCornerShape(15.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.25f)),
+                        modifier = Modifier.size(50.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.mipmap.ic_launcher),
+                            contentDescription = "NK PLAYER logo",
+                            modifier = Modifier.padding(5.dp)
+                        )
                     }
-                    Image(
-                        painter = painterResource(id = R.mipmap.ic_launcher),
-                        contentDescription = "NK PLAYER logo",
-                        modifier = Modifier.size(46.dp)
-                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("NK PLAYER", color = Color.White, fontSize = 23.sp,
+                            fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
+                        Spacer(Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(6.dp).background(accent, RoundedCornerShape(50)))
+                            Spacer(Modifier.width(6.dp))
+                            Text("PLAY WITHOUT LIMITS", color = accent, fontSize = 9.sp,
+                                letterSpacing = 1.55.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Surface(color = Color(0xFF151E2D), shape = RoundedCornerShape(12.dp)) {
+                        Icon(Icons.Default.GraphicEq, contentDescription = "Audio player",
+                            tint = accent, modifier = Modifier.padding(11.dp).size(20.dp))
+                    }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(15.dp))
                 when (tab) {
                     0 -> {
                         HomeHero(accent = accent, onImport = {
@@ -732,46 +764,61 @@ private fun LibraryTabHeader(
 @Composable
 private fun HomeHero(accent: Color, onImport: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(28.dp),
         color = Panel,
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.22f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Box(
             Modifier.background(
                 Brush.linearGradient(
-                    listOf(Color(0xFF182C43), Color(0xFF211B3D), Color(0xFF101827))
+                    listOf(Color(0xFF18334B), Color(0xFF211B3D), Color(0xFF111827))
                 )
             )
         ) {
-            Column(Modifier.padding(18.dp)) {
+            Column(Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(color = accent.copy(alpha = 0.14f), shape = RoundedCornerShape(12.dp), modifier = Modifier.size(42.dp)) {
+                    Surface(
+                        color = accent.copy(alpha = 0.14f),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.size(46.dp)
+                    ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.GraphicEq, null, tint = accent, modifier = Modifier.size(25.dp))
+                            Icon(Icons.Default.GraphicEq, null, tint = accent, modifier = Modifier.size(27.dp))
                         }
                     }
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(12.dp))
                     Column {
-                        Text("YOUR MEDIA. YOUR RULES.", color = accent, fontSize = 10.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
-                        Text("One home for every track.", color = Color.LightGray, fontSize = 11.sp)
+                        Text("YOUR MEDIA. YOUR RULES.", color = accent, fontSize = 10.sp,
+                            letterSpacing = 1.25.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(3.dp))
+                        Text("One home for every track.", color = Color(0xFFD3DCE8), fontSize = 12.sp)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Surface(color = Color.White.copy(alpha = 0.07f), shape = RoundedCornerShape(50)) {
+                        Text("MEDIA HUB", color = Color(0xFFD7E2F0), fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
                     }
                 }
-                Spacer(Modifier.height(18.dp))
-                Text("Press play.\nFeel the difference.", color = Color.White, fontSize = 27.sp,
-                    fontWeight = FontWeight.ExtraBold, lineHeight = 32.sp)
-                Spacer(Modifier.height(7.dp))
+                Spacer(Modifier.height(22.dp))
+                Text("Press play.\nFeel the difference.", color = Color.White, fontSize = 29.sp,
+                    fontWeight = FontWeight.ExtraBold, lineHeight = 34.sp, letterSpacing = (-0.4).sp)
+                Spacer(Modifier.height(8.dp))
                 Text("Your audio and videos, organised in one clean player.",
-                    color = Color(0xFFC1CAD8), fontSize = 12.sp, lineHeight = 17.sp)
-                Spacer(Modifier.height(16.dp))
+                    color = Color(0xFFC1CAD8), fontSize = 12.sp, lineHeight = 18.sp)
+                Spacer(Modifier.height(19.dp))
                 Button(
                     onClick = onImport,
                     colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Ink),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                    shape = RoundedCornerShape(15.dp),
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
                 ) {
-                    Icon(Icons.Default.Add, null)
+                    Icon(Icons.Default.Add, null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("IMPORT FROM DEVICE", fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                    Text("IMPORT FROM DEVICE", fontWeight = FontWeight.ExtraBold, letterSpacing = 0.65.sp)
+                    Spacer(Modifier.weight(1f))
+                    Icon(Icons.Default.ArrowForward, null, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -780,23 +827,41 @@ private fun HomeHero(accent: Color, onImport: () -> Unit) {
 
 @Composable
 private fun StatCard(label: String, value: String, modifier: Modifier, accent: Color) {
-    Surface(color = Panel, shape = RoundedCornerShape(15.dp), modifier = modifier) {
-        Column(Modifier.padding(10.dp)) {
-            Text(label, color = Color.LightGray, fontSize = 9.sp, letterSpacing = 0.6.sp)
-            Spacer(Modifier.height(5.dp))
-            Text(value, color = accent, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+    Surface(
+        color = Color(0xFF111827),
+        shape = RoundedCornerShape(17.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF273449)),
+        modifier = modifier
+    ) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 13.dp)) {
+            Text(label, color = Color(0xFFA9B6C9), fontSize = 9.sp,
+                letterSpacing = 0.75.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Spacer(Modifier.height(7.dp))
+            Text(value, color = accent, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, maxLines = 1)
         }
     }
 }
 
 @Composable
 private fun SearchBox(value: String, onValue: (String) -> Unit, accent: Color) {
-    OutlinedTextField(value, onValueChange = onValue, modifier = Modifier.fillMaxWidth(), singleLine = true,
-        placeholder = { Text("Search imported media…", color = Color.Gray) },
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValue,
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        placeholder = { Text("Search imported media…", color = Color(0xFF8290A5), fontSize = 13.sp) },
         leadingIcon = { Icon(Icons.Default.Search, null, tint = accent) },
-        shape = RoundedCornerShape(16.dp),
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = accent, unfocusedBorderColor = Color(0xFF29344A),
-            focusedTextColor = Color.White, unfocusedTextColor = Color.White))
+        shape = RoundedCornerShape(17.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = accent,
+            unfocusedBorderColor = Color(0xFF29364A),
+            focusedContainerColor = Color(0xFF111827),
+            unfocusedContainerColor = Color(0xFF0F1624),
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
+            cursorColor = accent
+        )
+    )
 }
 
 @Composable
@@ -809,26 +874,74 @@ private fun MediaList(
     onPick: (Track) -> Unit
 ) {
     if (items.isEmpty()) {
-        Column(modifier.fillMaxWidth().padding(vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.LibraryMusic, null, tint = Violet, modifier = Modifier.size(34.dp))
-            Spacer(Modifier.height(6.dp))
-            Text("No media here yet", color = Color.White, fontWeight = FontWeight.SemiBold)
-            Text("Import files to build your library.", color = Color.Gray, fontSize = 12.sp)
+        Column(
+            modifier.fillMaxWidth().padding(vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                color = accent.copy(alpha = 0.10f),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.size(58.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.LibraryMusic, null, tint = accent, modifier = Modifier.size(30.dp))
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text("No media here yet", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Spacer(Modifier.height(4.dp))
+            Text("Import files to build your library.", color = Color(0xFF9AA8BC), fontSize = 12.sp)
         }
     } else {
-        LazyColumn(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        LazyColumn(
+            modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
+            contentPadding = PaddingValues(vertical = 4.dp)
+        ) {
             items(items, key = { it.uri }) { track ->
-                Surface(color = if (track == selected) Color(0xFF172C3A) else Panel,
-                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().clickable { onPick(track) }) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (isVideo(track)) Icons.Default.PlayCircle else Icons.Default.MusicNote, null, tint = accent, modifier = Modifier.size(26.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Text(track.name, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
-                        Icon(Icons.Default.PlayArrow, contentDescription = "Play ${track.name}", tint = Color.LightGray)
-                        IconButton(
-                            onClick = { onRemove(track) },
-                            modifier = Modifier.size(40.dp)
+                val active = track == selected
+                Surface(
+                    color = if (active) Color(0xFF152B3A) else Color(0xFF111827),
+                    shape = RoundedCornerShape(17.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp, if (active) accent.copy(alpha = 0.45f) else Color(0xFF222E40)
+                    ),
+                    modifier = Modifier.fillMaxWidth().clickable { onPick(track) }
+                ) {
+                    Row(
+                        Modifier.padding(start = 11.dp, end = 5.dp, top = 9.dp, bottom = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = accent.copy(alpha = if (active) 0.20f else 0.10f),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.size(43.dp)
                         ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    if (isVideo(track)) Icons.Default.PlayCircle else Icons.Default.MusicNote,
+                                    null, tint = accent, modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(11.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(track.name, color = Color.White, maxLines = 1,
+                                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, fontSize = 13.sp)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                if (active) "NOW SELECTED" else if (isVideo(track)) "VIDEO FILE" else "AUDIO FILE",
+                                color = if (active) accent else Color(0xFF8795A9),
+                                fontSize = 9.sp, letterSpacing = 0.75.sp, fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = "Play ${track.name}",
+                            tint = if (active) accent else Color(0xFFAEBACB),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        IconButton(onClick = { onRemove(track) }, modifier = Modifier.size(40.dp)) {
                             Icon(
                                 Icons.Default.DeleteOutline,
                                 contentDescription = "Remove ${track.name} from library",
