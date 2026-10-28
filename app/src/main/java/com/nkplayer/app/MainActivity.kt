@@ -281,13 +281,19 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                         }
                     }
                     1, 2 -> {
-                        Text(if (tab == 1) "AUDIO LIBRARY" else "VIDEO LIBRARY", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(10.dp))
-                        Button(onClick = { picker.launch(arrayOf(if (tab == 1) "audio/*" else "video/*")) }, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.FolderOpen, null); Spacer(Modifier.width(8.dp)); Text(if (tab == 1) "Import audio files" else "Import video files")
-                        }
+                        val videoTab = tab == 2
+                        val filtered = tracks.filter { isVideo(it.uri) == videoTab && it.name.contains(query, true) }
+                        LibraryTabHeader(
+                            title = if (videoTab) "VIDEO LIBRARY" else "AUDIO LIBRARY",
+                            subtitle = if (videoTab) "Your clips, films and saved videos" else "Your music, podcasts and audio files",
+                            count = filtered.size,
+                            video = videoTab,
+                            accent = accent,
+                            onImport = { picker.launch(arrayOf(if (videoTab) "video/*" else "audio/*")) }
+                        )
+                        Spacer(Modifier.height(12.dp))
                         SearchBox(query, { query = it }, accent)
-                        val filtered = tracks.filter { isVideo(it.uri) == (tab == 2) && it.name.contains(query, true) }
+                        Spacer(Modifier.height(4.dp))
                         MediaList(filtered, selected, accent) { playTrack(it, filtered, player); selected = it }
                     }
                     else -> {
@@ -467,6 +473,43 @@ private fun playTrack(track: Track, queue: List<Track>, player: Player) {
     player.play()
 }
 
+
+
+@Composable
+private fun LibraryTabHeader(
+    title: String,
+    subtitle: String,
+    count: Int,
+    video: Boolean,
+    accent: Color,
+    onImport: () -> Unit
+) {
+    Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.background(Brush.horizontalGradient(listOf(Color(0xFF17283B), Color(0xFF17172B))))
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(color = accent.copy(alpha = 0.14f), shape = RoundedCornerShape(15.dp), modifier = Modifier.size(50.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(if (video) Icons.Default.VideoLibrary else Icons.Default.Headphones,
+                        contentDescription = null, tint = accent, modifier = Modifier.size(27.dp))
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, letterSpacing = 0.4.sp)
+                Spacer(Modifier.height(3.dp))
+                Text(subtitle, color = Color.LightGray, fontSize = 10.sp, maxLines = 2)
+                Spacer(Modifier.height(7.dp))
+                Text("$count FILE(S)", color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+            }
+            IconButton(onClick = onImport) {
+                Icon(Icons.Default.AddCircle, contentDescription = "Import files", tint = accent, modifier = Modifier.size(29.dp))
+            }
+        }
+    }
+}
 
 @Composable
 private fun HomeHero(accent: Color, onImport: () -> Unit) {
