@@ -16,6 +16,7 @@ A native Android audio/video player built with Kotlin, Jetpack Compose, Material
 - Load external `.srt` and `.vtt` subtitle files for the currently playing video through Android's document picker.
 - First playback-UI polish pass: now-playing status, previous/play-pause/next controls, seek bar and elapsed/total time labels.
 - Home-screen redesign pass: gradient media hero, clearer import action, library section/count, compact status cards and a first-run import tip.
+- Audio/video library UI pass: distinct gradient headers, file counts, descriptive labels and a quick import action on each tab.
 - GitHub Actions assembles a debug APK and uploads it as a downloadable workflow artifact.
 
 ## Build and download
