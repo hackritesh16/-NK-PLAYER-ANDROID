@@ -11,7 +11,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
-import androidx.media3.session.SessionCommands
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -86,8 +85,7 @@ class PlaybackService : MediaSessionService() {
             session: MediaSession,
             controller: MediaSession.ControllerInfo
         ): MediaSession.ConnectionResult {
-            val commands = SessionCommands.Builder()
-                .addAllSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS)
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                 .apply { FxCommands.all.forEach { add(it) } }
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
