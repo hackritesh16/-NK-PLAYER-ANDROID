@@ -32,6 +32,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -129,6 +130,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     var libraryLoaded by remember { mutableStateOf(false) }
     var fullScreenVideo by remember { mutableStateOf(false) }
     var subtitleDialog by remember { mutableStateOf(false) }
+    var externalSubtitleName by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(store) {
@@ -156,6 +158,32 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             Track(uri.toString(), name)
         }
         tracks = (tracks + incoming).distinctBy { it.uri }
+    }
+    val subtitlePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':').orEmpty()
+            val extension = name.substringAfterLast('.', "").lowercase()
+            val mimeType = when (extension) {
+                "srt" -> MimeTypes.APPLICATION_SUBRIP
+                "vtt" -> MimeTypes.TEXT_VTT
+                else -> null
+            }
+            val current = player.currentMediaItem
+            val index = player.currentMediaItemIndex
+            if (current != null && index >= 0 && mimeType != null) {
+                onPersistPermission(uri)
+                val subtitle = MediaItem.SubtitleConfiguration.Builder(uri)
+                    .setMimeType(mimeType)
+                    .setLanguage("und")
+                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                    .build()
+                val updated = current.buildUpon().setSubtitleConfigurations(listOf(subtitle)).build()
+                player.replaceMediaItem(index, updated)
+                externalSubtitleName = name
+            } else {
+                externalSubtitleName = if (mimeType == null) "Unsupported subtitle: use .srt or .vtt" else null
+            }
+        }
     }
 
     MaterialTheme(colorScheme = darkColorScheme(primary = accent, secondary = Violet, background = Ink, surface = Panel)) {
@@ -280,11 +308,19 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                         Spacer(Modifier.width(4.dp))
                                         Text("SUBTITLES", color = accent)
                                     }
+                                    TextButton(onClick = { subtitlePicker.launch(arrayOf("*/*")) }) {
+                                        Icon(Icons.Default.FileOpen, contentDescription = null, tint = accent)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("LOAD .SRT/.VTT", color = accent)
+                                    }
                                     TextButton(onClick = { fullScreenVideo = true }) {
                                         Icon(Icons.Default.Fullscreen, contentDescription = null, tint = accent)
                                         Spacer(Modifier.width(4.dp))
                                         Text("FULL SCREEN", color = accent)
                                     }
+                                }
+                                externalSubtitleName?.let { subtitleName ->
+                                    Text("Subtitle: $subtitleName", color = accent, fontSize = 11.sp, maxLines = 1)
                                 }
                                 AndroidView(factory = { context -> PlayerView(context).apply { this.player = player; useController = true } },
                                     update = { it.player = player }, modifier = Modifier.fillMaxWidth().height(190.dp))
