@@ -1,8 +1,10 @@
 package com.nkplayer.app
 
+import android.Manifest
 import android.content.ComponentName
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.app.PictureInPictureParams
 import android.content.pm.PackageManager
 import android.util.Rational
@@ -10,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -24,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -137,6 +142,18 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     var isSeeking by remember { mutableStateOf(false) }
     var seekPreview by remember { mutableFloatStateOf(0f) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* Playback remains usable if notifications are declined. */ }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     LaunchedEffect(store) {
         tracks = store.loadLibrary().map { Track(it.uri, it.name) }
@@ -232,9 +249,11 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                         Text("NK PLAYER", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
                         Text("PLAY WITHOUT LIMITS", color = accent, fontSize = 10.sp, letterSpacing = 2.sp)
                     }
-                    Surface(color = Panel, shape = RoundedCornerShape(14.dp), modifier = Modifier.size(46.dp)) {
-                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.GraphicEq, null, tint = accent, modifier = Modifier.size(28.dp)) }
-                    }
+                    Image(
+                        painter = painterResource(id = R.mipmap.ic_launcher),
+                        contentDescription = "NK PLAYER logo",
+                        modifier = Modifier.size(46.dp)
+                    )
                 }
                 Spacer(Modifier.height(16.dp))
                 when (tab) {
