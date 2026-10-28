@@ -11,7 +11,7 @@ import org.json.JSONObject
 
 private val Context.nkPlayerStore by preferencesDataStore(name = "nk_player_settings")
 
-data class SavedTrack(val uri: String, val name: String)
+data class SavedTrack(val uri: String, val name: String, val mimeType: String? = null)
 
 class LibraryStore(private val context: Context) {
     private val libraryKey = stringPreferencesKey("library_json")
@@ -24,7 +24,7 @@ class LibraryStore(private val context: Context) {
             buildList {
                 for (i in 0 until array.length()) {
                     val item = array.getJSONObject(i)
-                    add(SavedTrack(item.getString("uri"), item.getString("name")))
+                    add(SavedTrack(item.getString("uri"), item.getString("name"), item.optString("mimeType").takeIf { it.isNotBlank() }))
                 }
             }
         }.getOrDefault(emptyList())
@@ -33,7 +33,9 @@ class LibraryStore(private val context: Context) {
     suspend fun saveLibrary(items: List<SavedTrack>) {
         val array = JSONArray()
         items.distinctBy { it.uri }.forEach { track ->
-            array.put(JSONObject().put("uri", track.uri).put("name", track.name))
+            val item = JSONObject().put("uri", track.uri).put("name", track.name)
+            track.mimeType?.let { item.put("mimeType", it) }
+            array.put(item)
         }
         context.nkPlayerStore.edit { it[libraryKey] = array.toString() }
     }

@@ -9,7 +9,8 @@ A native Android audio/video player built with Kotlin, Jetpack Compose, Material
 - Import local audio/video using Android's document picker, with persisted access to user-selected files (no broad storage permission requested).
 - Custom NK PLAYER launcher icon and in-app brand mark, with adaptive icon support on Android 8.0+.
 - Android 13+ notification-permission request for notification-related features; playback can still be used if declined.
-- Search imported media and persist the library locally with Preferences DataStore.
+- Search imported media and persist the library locally with Preferences DataStore, including provider MIME types so document-picker video URIs are not classified by filename alone.
+- Player UI observes Media3 play/pause, playback-state and queue-transition events; selected track follows previous/next navigation and playback failures show a recoverable message.
 - Five saved accent themes: Neon Blue, Cyber Purple, Emerald Green, Crimson Red and Golden Amber.
 - Media3 playback queue: selecting an item queues the visible list and supports next/previous queue navigation.
 - Playback UI connects to a MediaSessionService, providing the foundation for background playback and system media controls.
@@ -36,6 +37,10 @@ gradle assembleDebug
 ```
 
 The output APK is normally generated at `app/build/outputs/apk/debug/app-debug.apk`.
+
+## UI/UX Pro Max skill
+
+The UI/UX Pro Max skill is installed under `.agents/skills/ui-ux-pro-max/` with searchable data, Python tools, references, and Jetpack Compose guidance. The NK PLAYER design system is documented in `design-system/nk-player/MASTER.md`.
 
 ## Still to implement or verify
 

@@ -2,7 +2,9 @@ package com.nkplayer.app
 
 import android.Manifest
 import android.content.ComponentName
+import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.Bundle
 import android.os.Build
 import android.app.PictureInPictureParams
@@ -38,6 +40,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -51,8 +54,8 @@ private val Ink = Color(0xFF080B14)
 private val Panel = Color(0xFF131A2A)
 private val Cyan = Color(0xFF48E5FF)
 private val Violet = Color(0xFF9B72FF)
-private data class Track(val uri: String, val name: String) {
-    fun saved() = SavedTrack(uri, name)
+private data class Track(val uri: String, val name: String, val mimeType: String? = null) {
+    fun saved() = SavedTrack(uri, name, mimeType)
 }
 
 class MainActivity : ComponentActivity() {
@@ -104,9 +107,9 @@ class MainActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val player = controllerState.value ?: return
-        val path = player.currentMediaItem?.localConfiguration?.uri?.lastPathSegment.orEmpty().lowercase()
-        val isVideo = listOf(".mp4", ".mkv", ".webm", ".mov", ".avi", ".3gp", ".m4v")
-            .any(path::endsWith)
+        val configuration = player.currentMediaItem?.localConfiguration
+        val path = configuration?.uri?.lastPathSegment.orEmpty().lowercase()
+        val isVideo = configuration?.mimeType?.startsWith("video/") == true || isVideo(path)
         if (isVideo && player.isPlaying && android.os.Build.VERSION.SDK_INT >= 26 &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
             runCatching {
@@ -140,9 +143,31 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     var playbackPosition by remember { mutableLongStateOf(0L) }
     var playbackDuration by remember { mutableLongStateOf(0L) }
     var isSeeking by remember { mutableStateOf(false) }
+    var playbackUiRevision by remember(player) { mutableIntStateOf(0) }
+    var playbackError by remember { mutableStateOf<String?>(null) }
     var seekPreview by remember { mutableFloatStateOf(0f) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    DisposableEffect(player, tracks) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) { playbackUiRevision++ }
+            override fun onPlaybackStateChanged(playbackState: Int) { playbackUiRevision++ }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val currentUri = mediaItem?.localConfiguration?.uri?.toString()
+                selected = tracks.firstOrNull { it.uri == currentUri }
+                playbackError = null
+                playbackUiRevision++
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                playbackError = error.localizedMessage?.takeIf { it.isNotBlank() }
+                    ?: "This file could not be played. Try another media file or format."
+                playbackUiRevision++
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    val isPlaying = remember(playbackUiRevision, player) { player.isPlaying }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* Playback remains usable if notifications are declined. */ }
@@ -156,7 +181,11 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     }
 
     LaunchedEffect(store) {
-        tracks = store.loadLibrary().map { Track(it.uri, it.name) }
+        tracks = store.loadLibrary().map { saved ->
+            val uri = Uri.parse(saved.uri)
+            val mimeType = saved.mimeType ?: runCatching { context.contentResolver.getType(uri) }.getOrNull()
+            Track(saved.uri, saved.name, mimeType)
+        }
         themeName = store.loadTheme()
         libraryLoaded = true
     }
@@ -185,20 +214,23 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         val incoming = uris.orEmpty().map { uri ->
             onPersistPermission(uri)
-            val name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':')
-                ?.takeIf { it.isNotBlank() } ?: "Media file"
-            Track(uri.toString(), name)
+            Track(uri.toString(), queryDisplayName(context, uri), context.contentResolver.getType(uri))
         }
         tracks = (tracks + incoming).distinctBy { it.uri }
     }
     val subtitlePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            val name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':').orEmpty()
+            val name = queryDisplayName(context, uri)
             val extension = name.substringAfterLast('.', "").lowercase()
+            val providerMimeType = context.contentResolver.getType(uri)
             val mimeType = when (extension) {
                 "srt" -> MimeTypes.APPLICATION_SUBRIP
                 "vtt" -> MimeTypes.TEXT_VTT
-                else -> null
+                else -> when (providerMimeType) {
+                    MimeTypes.APPLICATION_SUBRIP, "application/x-subrip" -> MimeTypes.APPLICATION_SUBRIP
+                    MimeTypes.TEXT_VTT, "text/vtt" -> MimeTypes.TEXT_VTT
+                    else -> null
+                }
             }
             val current = player.currentMediaItem
             val index = player.currentMediaItemIndex
@@ -283,7 +315,8 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                         }
                         Spacer(Modifier.height(10.dp))
                         SearchBox(query, { query = it }, accent)
-                        MediaList(tracks.filter { it.name.contains(query, true) }, selected, accent) {
+                        MediaList(tracks.filter { it.name.contains(query, true) }, selected, accent, modifier = Modifier.weight(1f)) {
+                            playbackError = null
                             playTrack(it, tracks.filter { item -> item.name.contains(query, true) }, player); selected = it
                         }
                         if (tracks.isEmpty()) {
@@ -301,7 +334,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                     }
                     1, 2 -> {
                         val videoTab = tab == 2
-                        val filtered = tracks.filter { isVideo(it.uri) == videoTab && it.name.contains(query, true) }
+                        val filtered = tracks.filter { isVideo(it) == videoTab && it.name.contains(query, true) }
                         LibraryTabHeader(
                             title = if (videoTab) "VIDEO LIBRARY" else "AUDIO LIBRARY",
                             subtitle = if (videoTab) "Your clips, films and saved videos" else "Your music, podcasts and audio files",
@@ -313,7 +346,10 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                         Spacer(Modifier.height(12.dp))
                         SearchBox(query, { query = it }, accent)
                         Spacer(Modifier.height(4.dp))
-                        MediaList(filtered, selected, accent) { playTrack(it, filtered, player); selected = it }
+                        MediaList(filtered, selected, accent, modifier = Modifier.weight(1f)) {
+                            playbackError = null
+                            playTrack(it, filtered, player); selected = it
+                        }
                     }
                     else -> {
                         StudioHeader(accent = accent, themeName = themeName)
@@ -360,17 +396,17 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                     Surface(color = Panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(if (isVideo(track.uri)) Icons.Default.Movie else Icons.Default.MusicNote, null, tint = accent, modifier = Modifier.size(26.dp))
+                                Icon(if (isVideo(track)) Icons.Default.Movie else Icons.Default.MusicNote, null, tint = accent, modifier = Modifier.size(26.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(track.name, color = Color.White, maxLines = 1, fontWeight = FontWeight.SemiBold)
-                                    Text(if (player.isPlaying) "NOW PLAYING" else "PLAYER READY", color = accent, fontSize = 9.sp, letterSpacing = 1.2.sp)
+                                    Text(if (isPlaying) "NOW PLAYING" else "PLAYER READY", color = accent, fontSize = 9.sp, letterSpacing = 1.2.sp)
                                 }
                                 IconButton(onClick = { player.seekToPreviousMediaItem() }) {
                                     Icon(Icons.Default.SkipPrevious, null, tint = Color.White)
                                 }
-                                IconButton(onClick = { if (player.isPlaying) player.pause() else player.play() }) {
-                                    Icon(if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = accent)
+                                IconButton(onClick = { if (isPlaying) player.pause() else player.play() }) {
+                                    Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = accent)
                                 }
                                 IconButton(onClick = { player.seekToNextMediaItem() }) {
                                     Icon(Icons.Default.SkipNext, null, tint = Color.White)
@@ -393,7 +429,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 Text(formatTime(if (isSeeking) (seekPreview * playbackDuration).toLong() else playbackPosition), color = Color.LightGray, fontSize = 10.sp)
                                 Text(formatTime(playbackDuration), color = Color.LightGray, fontSize = 10.sp)
                             }
-                            if (isVideo(track.uri)) {
+                            if (isVideo(track)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                                     TextButton(onClick = { subtitleDialog = true }) {
                                         Icon(Icons.Default.Subtitles, contentDescription = null, tint = accent)
@@ -423,7 +459,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                 Spacer(Modifier.height(8.dp))
             }
         }
-        if (subtitleDialog && selected?.let { isVideo(it.uri) } == true) {
+        if (subtitleDialog && selected?.let { isVideo(it) } == true) {
             val textGroups = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
             AlertDialog(
                 onDismissRequest = { subtitleDialog = false },
@@ -475,7 +511,16 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                 }
             )
         }
-        if (fullScreenVideo && selected?.let { isVideo(it.uri) } == true) {
+        if (playbackError != null) {
+            AlertDialog(
+                onDismissRequest = { playbackError = null },
+                containerColor = Panel,
+                title = { Text("Playback error", color = Color.White) },
+                text = { Text(playbackError.orEmpty(), color = Color.LightGray) },
+                confirmButton = { TextButton(onClick = { playbackError = null }) { Text("OK", color = Cyan) } }
+            )
+        }
+        if (fullScreenVideo && selected?.let { isVideo(it) } == true) {
             Dialog(
                 onDismissRequest = { fullScreenVideo = false },
                 properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
@@ -501,7 +546,12 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
 private fun playTrack(track: Track, queue: List<Track>, player: Player) {
     val playableQueue = queue.ifEmpty { listOf(track) }
     val startIndex = playableQueue.indexOfFirst { it.uri == track.uri }.coerceAtLeast(0)
-    player.setMediaItems(playableQueue.map { MediaItem.fromUri(it.uri) }, startIndex, 0L)
+    val mediaItems = playableQueue.map { item ->
+        MediaItem.Builder().setUri(item.uri).apply {
+            item.mimeType?.let { setMimeType(it) }
+        }.build()
+    }
+    player.setMediaItems(mediaItems, startIndex, 0L)
     player.prepare()
     player.play()
 }
@@ -676,21 +726,27 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, accent: Color) {
 }
 
 @Composable
-private fun MediaList(items: List<Track>, selected: Track?, accent: Color, onPick: (Track) -> Unit) {
+private fun MediaList(
+    items: List<Track>,
+    selected: Track?,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    onPick: (Track) -> Unit
+) {
     if (items.isEmpty()) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(modifier.fillMaxWidth().padding(vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.LibraryMusic, null, tint = Violet, modifier = Modifier.size(34.dp))
             Spacer(Modifier.height(6.dp))
             Text("No media here yet", color = Color.White, fontWeight = FontWeight.SemiBold)
             Text("Import files to build your library.", color = Color.Gray, fontSize = 12.sp)
         }
     } else {
-        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        LazyColumn(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             items(items, key = { it.uri }) { track ->
                 Surface(color = if (track == selected) Color(0xFF172C3A) else Panel,
                     shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().clickable { onPick(track) }) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (isVideo(track.uri)) Icons.Default.PlayCircle else Icons.Default.MusicNote, null, tint = accent, modifier = Modifier.size(26.dp))
+                        Icon(if (isVideo(track)) Icons.Default.PlayCircle else Icons.Default.MusicNote, null, tint = accent, modifier = Modifier.size(26.dp))
                         Spacer(Modifier.width(10.dp))
                         Text(track.name, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
                         Icon(Icons.Default.PlayArrow, null, tint = Color.LightGray)
@@ -711,7 +767,21 @@ private fun formatTime(milliseconds: Long): String {
     else "%02d:%02d".format(minutes, seconds)
 }
 
+private fun isVideo(track: Track): Boolean =
+    track.mimeType?.startsWith("video/") == true || isVideo(track.uri)
+
 private fun isVideo(uri: String): Boolean {
     val path = Uri.parse(uri).lastPathSegment.orEmpty().lowercase()
-    return listOf(".mp4", ".mkv", ".webm", ".mov", ".avi", ".3gp", ".m4v").any(path::endsWith)
+    return listOf(".mp4", ".mkv", ".webm", ".mov", ".avi", ".3gp", ".m4v", ".mpeg", ".mpg", ".ts", ".ogv").any(path::endsWith)
+}
+
+private fun queryDisplayName(context: Context, uri: Uri): String {
+    val providerName = runCatching {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
+    }.getOrNull()
+    return providerName?.takeIf { it.isNotBlank() }
+        ?: uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':')?.takeIf { it.isNotBlank() }
+        ?: "Media file"
 }
