@@ -458,8 +458,13 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 externalSubtitleName?.let { subtitleName ->
                                     Text("Subtitle: $subtitleName", color = accent, fontSize = 11.sp, maxLines = 1)
                                 }
-                                AndroidView(factory = { context -> PlayerView(context).apply { this.player = player; useController = true } },
-                                    update = { it.player = player }, modifier = Modifier.fillMaxWidth().height(190.dp))
+                                if (!fullScreenVideo) {
+                                    AndroidView(
+                                        factory = { context -> PlayerView(context).apply { this.player = player; useController = true } },
+                                        update = { it.player = player },
+                                        modifier = Modifier.fillMaxWidth().height(190.dp)
+                                    )
+                                }
                             }
                         }
                     }
