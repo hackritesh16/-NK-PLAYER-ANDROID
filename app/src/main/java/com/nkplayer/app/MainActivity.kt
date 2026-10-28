@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -126,6 +128,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     var themeName by remember { mutableStateOf("Neon Blue") }
     var libraryLoaded by remember { mutableStateOf(false) }
     var fullScreenVideo by remember { mutableStateOf(false) }
+    var subtitleDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(store) {
@@ -271,7 +274,12 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 IconButton(onClick = { player.seekToNextMediaItem() }) { Icon(Icons.Default.SkipNext, null, tint = Color.White) }
                             }
                             if (isVideo(track.uri)) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                                    TextButton(onClick = { subtitleDialog = true }) {
+                                        Icon(Icons.Default.Subtitles, contentDescription = null, tint = accent)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("SUBTITLES", color = accent)
+                                    }
                                     TextButton(onClick = { fullScreenVideo = true }) {
                                         Icon(Icons.Default.Fullscreen, contentDescription = null, tint = accent)
                                         Spacer(Modifier.width(4.dp))
@@ -286,6 +294,58 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                 }
                 Spacer(Modifier.height(8.dp))
             }
+        }
+        if (subtitleDialog && selected?.let { isVideo(it.uri) } == true) {
+            val textGroups = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+            AlertDialog(
+                onDismissRequest = { subtitleDialog = false },
+                containerColor = Panel,
+                title = { Text("Subtitle track", color = Color.White) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            if (textGroups.isEmpty()) "No embedded subtitles found in this video." else "Choose an available embedded subtitle track.",
+                            color = Color.LightGray,
+                            fontSize = 13.sp
+                        )
+                        TextButton(onClick = {
+                            player.trackSelectionParameters = player.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                .build()
+                            subtitleDialog = false
+                        }) {
+                            Text("Off", color = Cyan)
+                        }
+                        textGroups.forEach { group ->
+                            for (index in 0 until group.length) {
+                                if (group.isTrackSupported(index)) {
+                                    val format = group.getTrackFormat(index)
+                                    val label = format.label?.takeIf { it.isNotBlank() }
+                                        ?: format.language?.takeIf { it.isNotBlank() }
+                                        ?: "Subtitle ${index + 1}"
+                                    TextButton(onClick = {
+                                        player.trackSelectionParameters = player.trackSelectionParameters
+                                            .buildUpon()
+                                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
+                                            .build()
+                                        subtitleDialog = false
+                                    }) {
+                                        Text(label, color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { subtitleDialog = false }) {
+                        Text("CLOSE", color = Cyan)
+                    }
+                }
+            )
         }
         if (fullScreenVideo && selected?.let { isVideo(it.uri) } == true) {
             Dialog(
