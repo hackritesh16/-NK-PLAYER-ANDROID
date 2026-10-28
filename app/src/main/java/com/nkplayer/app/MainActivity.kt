@@ -68,9 +68,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
-        val future = MediaController.Builder(this, token).buildAsync()
+        // Show the Compose shell even if a device rejects MediaSession initialization.
+        val startup = runCatching {
+            val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
+            MediaController.Builder(this, token).buildAsync()
+        }
+        val future = startup.getOrNull()
         controllerFuture = future
+        controllerError.value = startup.exceptionOrNull()?.let { error ->
+            error.cause?.localizedMessage ?: error.localizedMessage ?: "Unable to initialize media controller"
+        }
 
         setContent {
             val player = controllerState.value
@@ -109,7 +116,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        future.addListener({
+        future?.addListener({
             runOnUiThread {
                 val connected = runCatching { future.get() }
                 controllerState.value = connected.getOrNull()
@@ -221,16 +228,17 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     }
 
     LaunchedEffect(store) {
-        tracks = store.loadLibrary().map { saved ->
+        // Corrupt or inaccessible preferences must not terminate the player UI.
+        tracks = runCatching { store.loadLibrary() }.getOrDefault(emptyList()).map { saved ->
             val uri = Uri.parse(saved.uri)
             val mimeType = saved.mimeType ?: runCatching { context.contentResolver.getType(uri) }.getOrNull()
             Track(saved.uri, saved.name, mimeType)
         }
-        themeName = store.loadTheme()
+        themeName = runCatching { store.loadTheme() }.getOrDefault("Neon Blue")
         libraryLoaded = true
     }
     LaunchedEffect(tracks, libraryLoaded) {
-        if (libraryLoaded) store.saveLibrary(tracks.map { it.saved() })
+        if (libraryLoaded) runCatching { store.saveLibrary(tracks.map { it.saved() }) }
     }
     LaunchedEffect(player, isSeeking) {
         while (true) {
@@ -243,7 +251,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             delay(500)
         }
     }
-    LaunchedEffect(themeName) { store.saveTheme(themeName) }
+    LaunchedEffect(themeName) { runCatching { store.saveTheme(themeName) } }
 
     val accent = when (themeName) {
         "Cyber Purple" -> Violet

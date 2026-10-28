@@ -46,7 +46,8 @@ class PlaybackService : MediaSessionService() {
                 runCatching { effects.attach(audioSessionId) }
             }
         })
-        runCatching { effects.attach(player.audioSessionId) }
+        // Effects are initialized only after ExoPlayer provides a real audio session.
+        // Avoid touching vendor audio-effect implementations during app startup.
 
         val openApp = PendingIntent.getActivity(
             this,
