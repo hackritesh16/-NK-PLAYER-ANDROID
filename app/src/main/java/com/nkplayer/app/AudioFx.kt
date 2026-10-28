@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Equalizer
+import androidx.compose.material.icons.filled.Equalizer as EqualizerIcon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -233,6 +233,7 @@ private fun sendFx(player: Player, action: String, vararg args: Pair<String, Any
         when (value) {
             is Int -> extras.putInt(key, value)
             is Boolean -> extras.putBoolean(key, value)
+            else -> Unit
         }
     }
     controller.sendCustomCommand(SessionCommand(action, Bundle.EMPTY), extras)
@@ -259,7 +260,7 @@ internal fun EqualizerSection(player: Player, accent: Color) {
     ) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Equalizer, null, tint = accent, modifier = Modifier.size(28.dp))
+                Icon(Icons.Default.EqualizerIcon, null, tint = accent, modifier = Modifier.size(28.dp))
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("EQUALIZER", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
