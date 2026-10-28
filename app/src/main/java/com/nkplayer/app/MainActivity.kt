@@ -168,6 +168,14 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
         onDispose { player.removeListener(listener) }
     }
     val isPlaying = remember(playbackUiRevision, player) { player.isPlaying }
+    val removeTrack: (Track) -> Unit = { track ->
+        tracks = tracks.filterNot { it.uri == track.uri }
+        if (selected?.uri == track.uri) {
+            player.stop()
+            player.clearMediaItems()
+            selected = null
+        }
+    }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* Playback remains usable if notifications are declined. */ }
@@ -315,7 +323,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                         }
                         Spacer(Modifier.height(10.dp))
                         SearchBox(query, { query = it }, accent)
-                        MediaList(tracks.filter { it.name.contains(query, true) }, selected, accent, modifier = Modifier.weight(1f)) {
+                        MediaList(tracks.filter { it.name.contains(query, true) }, selected, accent, modifier = Modifier.weight(1f), onRemove = removeTrack) {
                             playbackError = null
                             playTrack(it, tracks.filter { item -> item.name.contains(query, true) }, player); selected = it
                         }
@@ -346,7 +354,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                         Spacer(Modifier.height(12.dp))
                         SearchBox(query, { query = it }, accent)
                         Spacer(Modifier.height(4.dp))
-                        MediaList(filtered, selected, accent, modifier = Modifier.weight(1f)) {
+                        MediaList(filtered, selected, accent, modifier = Modifier.weight(1f), onRemove = removeTrack) {
                             playbackError = null
                             playTrack(it, filtered, player); selected = it
                         }
@@ -731,6 +739,7 @@ private fun MediaList(
     selected: Track?,
     accent: Color,
     modifier: Modifier = Modifier,
+    onRemove: (Track) -> Unit,
     onPick: (Track) -> Unit
 ) {
     if (items.isEmpty()) {
@@ -749,7 +758,17 @@ private fun MediaList(
                         Icon(if (isVideo(track)) Icons.Default.PlayCircle else Icons.Default.MusicNote, null, tint = accent, modifier = Modifier.size(26.dp))
                         Spacer(Modifier.width(10.dp))
                         Text(track.name, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
-                        Icon(Icons.Default.PlayArrow, null, tint = Color.LightGray)
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Play ${track.name}", tint = Color.LightGray)
+                        IconButton(
+                            onClick = { onRemove(track) },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                contentDescription = "Remove ${track.name} from library",
+                                tint = Color(0xFFFF7A8A)
+                            )
+                        }
                     }
                 }
             }
