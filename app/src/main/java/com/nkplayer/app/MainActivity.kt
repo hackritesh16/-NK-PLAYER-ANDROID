@@ -335,7 +335,8 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                             }
                         }
                     }
-                                selected?.let { track ->
+                }
+                selected?.let { track ->
                     Spacer(Modifier.height(8.dp))
                     Surface(color = Panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp)) {
