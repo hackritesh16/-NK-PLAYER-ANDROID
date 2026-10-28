@@ -146,7 +146,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     LaunchedEffect(tracks, libraryLoaded) {
         if (libraryLoaded) store.saveLibrary(tracks.map { it.saved() })
     }
-    LaunchedEffect(player) {
+    LaunchedEffect(player, isSeeking) {
         while (true) {
             if (!isSeeking) {
                 playbackPosition = player.currentPosition.coerceAtLeast(0L)
