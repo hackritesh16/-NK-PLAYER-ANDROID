@@ -1,5 +1,6 @@
 package com.nkplayer.app
 
+import android.content.ComponentName
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -25,8 +26,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.Player
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import androidx.media3.ui.PlayerView
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 
 private val Ink = Color(0xFF080B14)
 private val Panel = Color(0xFF131A2A)
@@ -37,35 +42,62 @@ private data class Track(val uri: String, val name: String) {
 }
 
 class MainActivity : ComponentActivity() {
-    private lateinit var player: ExoPlayer
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+    private val controllerState = mutableStateOf<MediaController?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        player = ExoPlayer.Builder(this).build()
+        val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
+        val future = MediaController.Builder(this, token).buildAsync()
+        controllerFuture = future
+
         setContent {
-            NkPlayerApp(
-                player = player,
-                store = LibraryStore(this),
-                onPersistPermission = { uri ->
-                    runCatching {
-                        contentResolver.takePersistableUriPermission(
-                            uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        )
+            val player = controllerState.value
+            if (player == null) {
+                MaterialTheme(colorScheme = darkColorScheme(primary = Cyan, background = Ink, surface = Panel)) {
+                    Surface(Modifier.fillMaxSize(), color = Ink) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = Cyan)
+                                Spacer(Modifier.height(12.dp))
+                                Text("Connecting NK PLAYER…", color = Color.White)
+                            }
+                        }
                     }
                 }
-            )
+            } else {
+                NkPlayerApp(
+                    player = player,
+                    store = LibraryStore(this),
+                    onPersistPermission = { uri ->
+                        runCatching {
+                            contentResolver.takePersistableUriPermission(
+                                uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        }
+                    }
+                )
+            }
         }
+
+        future.addListener({
+            runOnUiThread {
+                controllerState.value = runCatching { future.get() }.getOrNull()
+            }
+        }, MoreExecutors.directExecutor())
     }
 
     override fun onDestroy() {
-        player.release()
+        controllerState.value = null
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
         super.onDestroy()
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NkPlayerApp(player: ExoPlayer, store: LibraryStore, onPersistPermission: (Uri) -> Unit) {
+private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission: (Uri) -> Unit) {
     var tracks by remember { mutableStateOf(emptyList<Track>()) }
     var selected by remember { mutableStateOf<Track?>(null) }
     var tab by remember { mutableIntStateOf(0) }
@@ -161,7 +193,7 @@ private fun NkPlayerApp(player: ExoPlayer, store: LibraryStore, onPersistPermiss
                         Spacer(Modifier.height(12.dp))
                         SearchBox(query, { query = it }, accent)
                         MediaList(tracks.filter { it.name.contains(query, true) }, selected, accent) {
-                            playTrack(it, player); selected = it
+                            playTrack(it, tracks.filter { item -> item.name.contains(query, true) }, player); selected = it
                         }
                     }
                     1, 2 -> {
@@ -172,7 +204,7 @@ private fun NkPlayerApp(player: ExoPlayer, store: LibraryStore, onPersistPermiss
                         }
                         SearchBox(query, { query = it }, accent)
                         val filtered = tracks.filter { isVideo(it.uri) == (tab == 2) && it.name.contains(query, true) }
-                        MediaList(filtered, selected, accent) { playTrack(it, player); selected = it }
+                        MediaList(filtered, selected, accent) { playTrack(it, filtered, player); selected = it }
                     }
                     else -> {
                         Text("PLAYER STUDIO", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -229,8 +261,10 @@ private fun NkPlayerApp(player: ExoPlayer, store: LibraryStore, onPersistPermiss
     }
 }
 
-private fun playTrack(track: Track, player: ExoPlayer) {
-    player.setMediaItem(MediaItem.fromUri(track.uri))
+private fun playTrack(track: Track, queue: List<Track>, player: Player) {
+    val playableQueue = queue.ifEmpty { listOf(track) }
+    val startIndex = playableQueue.indexOfFirst { it.uri == track.uri }.coerceAtLeast(0)
+    player.setMediaItems(playableQueue.map { MediaItem.fromUri(it.uri) }, startIndex, 0L)
     player.prepare()
     player.play()
 }
