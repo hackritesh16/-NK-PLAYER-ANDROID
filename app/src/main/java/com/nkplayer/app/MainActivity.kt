@@ -239,29 +239,45 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                 Spacer(Modifier.height(16.dp))
                 when (tab) {
                     0 -> {
-                        Surface(shape = RoundedCornerShape(24.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(18.dp)) {
-                                Text("YOUR MEDIA. YOUR VIBE.", color = Color.LightGray, fontSize = 11.sp, letterSpacing = 1.2.sp)
-                                Spacer(Modifier.height(6.dp))
-                                Text("Make every play\nfeel cinematic.", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, lineHeight = 31.sp)
-                                Spacer(Modifier.height(16.dp))
-                                Button(onClick = { picker.launch(arrayOf("audio/*", "video/*")) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Ink),
-                                    modifier = Modifier.fillMaxWidth()) {
-                                    Icon(Icons.Default.Add, null); Spacer(Modifier.width(8.dp)); Text("IMPORT MEDIA", fontWeight = FontWeight.Bold)
+                        HomeHero(accent = accent, onImport = {
+                            picker.launch(arrayOf("audio/*", "video/*"))
+                        })
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            StatCard("YOUR FILES", tracks.size.toString(), Modifier.weight(1f), accent)
+                            StatCard("PLAYER", "MEDIA3", Modifier.weight(1f), accent)
+                            StatCard("STYLE", themeName.substringBefore(' '), Modifier.weight(1f), accent)
+                        }
+                        Spacer(Modifier.height(18.dp))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("YOUR LIBRARY", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                Text(if (tracks.isEmpty()) "Start by importing your favourite files" else "${tracks.size} item(s) ready to play",
+                                    color = Color.Gray, fontSize = 11.sp)
+                            }
+                            Surface(color = Panel, shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.size(42.dp).clickable { picker.launch(arrayOf("audio/*", "video/*")) }) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Add, contentDescription = "Import media", tint = accent)
                                 }
                             }
                         }
-                        Spacer(Modifier.height(14.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatCard("LIBRARY", tracks.size.toString(), Modifier.weight(1f), accent)
-                            StatCard("ENGINE", "MEDIA3", Modifier.weight(1f), accent)
-                            StatCard("THEME", themeName.substringBefore(' '), Modifier.weight(1f), accent)
-                        }
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(10.dp))
                         SearchBox(query, { query = it }, accent)
                         MediaList(tracks.filter { it.name.contains(query, true) }, selected, accent) {
                             playTrack(it, tracks.filter { item -> item.name.contains(query, true) }, player); selected = it
+                        }
+                        if (tracks.isEmpty()) {
+                            Spacer(Modifier.height(10.dp))
+                            Surface(color = Color(0xFF101B2B), shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth()) {
+                                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.TipsAndUpdates, null, tint = accent, modifier = Modifier.size(20.dp))
+                                    Spacer(Modifier.width(9.dp))
+                                    Text("Tip: import audio or video from your phone. Your library stays on this device.",
+                                        color = Color.LightGray, fontSize = 11.sp, lineHeight = 15.sp)
+                                }
+                            }
                         }
                     }
                     1, 2 -> {
@@ -449,6 +465,56 @@ private fun playTrack(track: Track, queue: List<Track>, player: Player) {
     player.setMediaItems(playableQueue.map { MediaItem.fromUri(it.uri) }, startIndex, 0L)
     player.prepare()
     player.play()
+}
+
+
+@Composable
+private fun HomeHero(accent: Color, onImport: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(26.dp),
+        color = Panel,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Box(
+            Modifier.background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF182C43), Color(0xFF211B3D), Color(0xFF101827))
+                )
+            )
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(color = accent.copy(alpha = 0.14f), shape = RoundedCornerShape(12.dp), modifier = Modifier.size(42.dp)) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.GraphicEq, null, tint = accent, modifier = Modifier.size(25.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text("YOUR MEDIA. YOUR RULES.", color = accent, fontSize = 10.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+                        Text("One home for every track.", color = Color.LightGray, fontSize = 11.sp)
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
+                Text("Press play.\nFeel the difference.", color = Color.White, fontSize = 27.sp,
+                    fontWeight = FontWeight.ExtraBold, lineHeight = 32.sp)
+                Spacer(Modifier.height(7.dp))
+                Text("Your audio and videos, organised in one clean player.",
+                    color = Color(0xFFC1CAD8), fontSize = 12.sp, lineHeight = 17.sp)
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onImport,
+                    colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Ink),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
+                    Icon(Icons.Default.Add, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("IMPORT FROM DEVICE", fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                }
+            }
+        }
+    }
 }
 
 @Composable
