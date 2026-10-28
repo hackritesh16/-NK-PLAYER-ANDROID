@@ -4,4 +4,4 @@ The Android project has moved beyond the starter milestone. Current build status
 
 Stack: Kotlin, Jetpack Compose, AndroidX Media3.
 
-Current milestone: v0.3.0 development build. CI assembles the debug APK successfully. Device playback, notification controls, PiP, equalizer and release signing still require implementation or real-device verification.
+Current milestone: v0.4.0 development build. Adds a working equalizer, bass boost, virtualizer, shuffle/repeat, playback speed and sleep timer. Device playback, notification controls, PiP, effects and release signing still require real-device verification.

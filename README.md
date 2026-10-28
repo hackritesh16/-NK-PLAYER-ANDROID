@@ -2,7 +2,7 @@
 
 A native Android audio/video player built with Kotlin, Jetpack Compose, Material 3 and AndroidX Media3.
 
-## Current development milestone: v0.3.0
+## Current development milestone: v0.4.0
 
 ### Implemented in source
 - Dark/neon interface with Home, Audio, Video and Studio tabs.
@@ -20,7 +20,10 @@ A native Android audio/video player built with Kotlin, Jetpack Compose, Material
 - First playback-UI polish pass: now-playing status, previous/play-pause/next controls, seek bar and elapsed/total time labels.
 - Home-screen redesign pass: gradient media hero, clearer import action, library section/count, compact status cards and a first-run import tip.
 - Audio/video library UI pass: distinct gradient headers, file counts, descriptive labels and a quick import action on each tab.
-- Studio UI pass: premium header with active-theme status, selectable accent-theme preview cards and a clearly marked planned audio-effects section.
+- Studio UI pass: premium header with active-theme status and selectable accent-theme preview cards.
+- Working audio effects (Studio tab): system Equalizer with presets and per-band sliders, Bass Boost and Virtualizer. Effects live in the playback service, attach to the player's audio session, and their settings persist across app restarts. Availability depends on the device's audio effect support.
+- Player controls: shuffle, repeat (off / all / one), playback speed (0.5x to 2x) and a sleep timer (15/30/45/60 min).
+- Tapping the playback notification opens the app; the service stops when the app is swiped away and nothing is playing.
 - GitHub Actions assembles a debug APK and uploads it as a downloadable workflow artifact.
 
 ## Build and download
@@ -48,7 +51,7 @@ This is an active development build, not yet a production-ready release. The lat
 - Verify background playback, notification controls, audio focus and playback restoration on a real device (manifest declarations are present; device behavior still needs testing).
 - Verify full-screen video and Picture-in-Picture behavior on real devices, including orientation and system UI interactions.
 - Subtitle synchronization/offset controls and broader subtitle-format support.
-- Audio equalizer and effects lifecycle (the Studio screen currently labels these as planned; no fake controls are presented).
+- Verify equalizer/bass/virtualizer behaviour on real devices (some devices or audio routes ignore platform effects).
 - Robust metadata/MIME-type detection, format-specific error handling and accessibility polish.
 - Continue the broader UI redesign across Audio, Video and Studio tabs; verify responsive layout and accessibility polish.
 - Automated UI tests, release signing and release APK.

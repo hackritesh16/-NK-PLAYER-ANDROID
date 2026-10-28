@@ -20,7 +20,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -41,6 +43,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -152,6 +155,9 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { playbackUiRevision++ }
             override fun onPlaybackStateChanged(playbackState: Int) { playbackUiRevision++ }
+            override fun onRepeatModeChanged(repeatMode: Int) { playbackUiRevision++ }
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) { playbackUiRevision++ }
+            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) { playbackUiRevision++ }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val currentUri = mediaItem?.localConfiguration?.uri?.toString()
                 selected = tracks.firstOrNull { it.uri == currentUri }
@@ -168,6 +174,19 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
         onDispose { player.removeListener(listener) }
     }
     val isPlaying = remember(playbackUiRevision, player) { player.isPlaying }
+    val repeatMode = remember(playbackUiRevision, player) { player.repeatMode }
+    val shuffleOn = remember(playbackUiRevision, player) { player.shuffleModeEnabled }
+    val speed = remember(playbackUiRevision, player) { player.playbackParameters.speed }
+    var sleepEndsAt by remember { mutableLongStateOf(0L) }
+    var sleepChoice by remember { mutableIntStateOf(0) }
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(sleepEndsAt) {
+        if (sleepEndsAt > 0L) {
+            delay((sleepEndsAt - System.currentTimeMillis()).coerceAtLeast(0L))
+            player.pause()
+            sleepEndsAt = 0L
+        }
+    }
     val removeTrack: (Track) -> Unit = { track ->
         tracks = tracks.filterNot { it.uri == track.uri }
         if (selected?.uri == track.uri) {
@@ -202,6 +221,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     }
     LaunchedEffect(player, isSeeking) {
         while (true) {
+            nowMs = System.currentTimeMillis()
             if (!isSeeking) {
                 playbackPosition = player.currentPosition.coerceAtLeast(0L)
                 playbackDuration = player.duration.takeIf { it > 0L } ?: 0L
@@ -359,7 +379,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                             playTrack(it, filtered, player); selected = it
                         }
                     }
-                    else -> {
+                    else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                         StudioHeader(accent = accent, themeName = themeName)
                         Spacer(Modifier.height(14.dp))
                         Text("ACCENT THEMES", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
@@ -382,21 +402,11 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                             Spacer(Modifier.height(8.dp))
                         }
                         Spacer(Modifier.height(4.dp))
-                        Surface(color = Panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.GraphicEq, null, tint = accent, modifier = Modifier.size(28.dp))
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text("AUDIO EFFECTS", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                    Text("Equalizer and sound effects are planned for a future update.",
-                                        color = Color.Gray, fontSize = 10.sp, lineHeight = 14.sp)
-                                }
-                                Surface(color = accent.copy(alpha = 0.12f), shape = RoundedCornerShape(9.dp)) {
-                                    Text("SOON", color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
-                                }
-                            }
-                        }
+                        Text("SOUND", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                        Text("Equalizer, bass boost and virtualizer for all playback.", color = Color.Gray, fontSize = 11.sp)
+                        Spacer(Modifier.height(10.dp))
+                        EqualizerSection(player = player, accent = accent)
+                        Spacer(Modifier.height(12.dp))
                     }
                 }
                 selected?.let { track ->
@@ -436,6 +446,44 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text(formatTime(if (isSeeking) (seekPreview * playbackDuration).toLong() else playbackPosition), color = Color.LightGray, fontSize = 10.sp)
                                 Text(formatTime(playbackDuration), color = Color.LightGray, fontSize = 10.sp)
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { player.shuffleModeEnabled = !shuffleOn }) {
+                                    Icon(Icons.Default.Shuffle, contentDescription = "Shuffle",
+                                        tint = if (shuffleOn) accent else Color.Gray)
+                                }
+                                IconButton(onClick = {
+                                    player.repeatMode = when (repeatMode) {
+                                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                        else -> Player.REPEAT_MODE_OFF
+                                    }
+                                }) {
+                                    Icon(
+                                        if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                                        contentDescription = "Repeat mode",
+                                        tint = if (repeatMode == Player.REPEAT_MODE_OFF) Color.Gray else accent
+                                    )
+                                }
+                                TextButton(onClick = {
+                                    val steps = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+                                    player.setPlaybackSpeed(steps.firstOrNull { it > speed + 0.01f } ?: steps.first())
+                                }) {
+                                    Text(formatSpeed(speed), color = if (speed != 1f) accent else Color.LightGray, fontSize = 12.sp)
+                                }
+                                TextButton(onClick = {
+                                    val options = listOf(0, 15, 30, 45, 60)
+                                    sleepChoice = options[(options.indexOf(sleepChoice) + 1) % options.size]
+                                    sleepEndsAt = if (sleepChoice > 0) System.currentTimeMillis() + sleepChoice * 60_000L else 0L
+                                }) {
+                                    Icon(Icons.Default.Bedtime, contentDescription = "Sleep timer",
+                                        tint = if (sleepEndsAt > 0L) accent else Color.Gray, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        if (sleepEndsAt > 0L) "${((sleepEndsAt - nowMs).coerceAtLeast(0L) + 59_999L) / 60_000L}m" else "SLEEP",
+                                        color = if (sleepEndsAt > 0L) accent else Color.LightGray, fontSize = 12.sp
+                                    )
+                                }
                             }
                             if (isVideo(track)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
@@ -780,6 +828,9 @@ private fun MediaList(
         }
     }
 }
+
+private fun formatSpeed(speed: Float): String =
+    "%.2f".format(speed).trimEnd('0').trimEnd('.').trimEnd(',') + "x"
 
 private fun formatTime(milliseconds: Long): String {
     if (milliseconds <= 0L) return "00:00"
