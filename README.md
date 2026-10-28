@@ -1,47 +1,45 @@
 # NK PLAYER — Android
 
-Native Android media-player project built with Kotlin, Jetpack Compose, Material 3 and AndroidX Media3 ExoPlayer.
+A native Android audio/video player built with Kotlin, Jetpack Compose, Material 3 and AndroidX Media3.
 
-## Current milestone: v0.2.0
+## Current development milestone: v0.3.0
 
-- Dark interface with Home, Audio, Video and Studio tabs.
-- Import local audio/video through Android's document picker.
-- Search the imported list and play selected items with Media3.
-- Persist imported URI/name entries and theme selection using Preferences DataStore.
-- Request persistable URI access for imported documents.
-- Five accent themes: Neon Blue, Cyber Purple, Emerald Green, Crimson Red and Golden Amber.
-- GitHub Actions workflow to run a debug APK build on pushes and pull requests.
+### Implemented in source
+- Dark/neon interface with Home, Audio, Video and Studio tabs.
+- Import local audio/video using Android's document picker.
+- Search imported media and persist the library locally with Preferences DataStore.
+- Five saved accent themes: Neon Blue, Cyber Purple, Emerald Green, Crimson Red and Golden Amber.
+- Media3 playback queue: selecting an item queues the visible list and supports next/previous queue navigation.
+- Playback UI connects to a MediaSessionService, providing the foundation for background playback and system media controls.
+- GitHub Actions assembles a debug APK and uploads it as a downloadable workflow artifact.
 
-## Build
+## Build and download
 
-Requirements:
-- JDK 17
-- Android SDK Platform 35
-- Gradle 8.9 (the CI workflow installs Gradle directly)
+The repository's **Actions** tab runs `gradle assembleDebug` for pushes to `main`. When the workflow succeeds, open the latest successful run and download the artifact named `nk-player-debug-apk`.
 
-From the repository root:
+- [Latest build runs](https://github.com/hackritesh16/-NK-PLAYER-ANDROID/actions)
+- [Source code](https://github.com/hackritesh16/-NK-PLAYER-ANDROID)
+
+Local build requirements: JDK 17, Android SDK Platform 35 and Gradle 8.9.
 
 ```bash
 gradle assembleDebug
 ```
 
-The debug APK, if the build succeeds, is generated at `app/build/outputs/apk/debug/app-debug.apk`.
+The output APK is normally generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
-## Important limitations
+## Still to implement or verify
 
-This is an early development milestone, not a production-ready player. The project has not yet been verified by a successful Android build or device test in this session. GitHub Actions is configured to provide that check.
-
-Still to implement:
-- MediaSessionService for reliable background playback and notification controls.
-- Persistent playback queue and proper next/previous queue behavior.
+This is an active development build, not yet a production-ready release. The latest code must pass CI and still needs real-device testing. The following remain planned or incomplete:
+- Verify background playback, notification controls, audio focus and playback restoration on a real device.
 - Full-screen video, picture-in-picture and orientation handling.
 - Subtitle selection and synchronization controls.
-- Audio equalizer and audio-session lifecycle handling.
-- More robust media metadata, MIME-type detection and error handling.
-- UI/instrumentation tests and release signing.
+- Audio equalizer and effects lifecycle.
+- Robust metadata/MIME-type detection, format-specific error handling and accessibility polish.
+- Automated UI tests, release signing and release APK.
 
-Video/audio classification currently uses the URI's last path segment extension as a simple UI heuristic; it is not a guarantee of decoder support.
+The video/audio classification used for list filtering is currently a filename-extension heuristic; it does not guarantee that every file format is playable.
 
 ## Privacy
 
-The app uses Android's document picker and stores the selected URI strings and display names locally in Preferences DataStore. It does not upload media files to a server.
+Media is selected through Android's document picker. The library stores selected URI strings and display names locally; media files are not uploaded to a server.
