@@ -11,6 +11,7 @@ A native Android audio/video player built with Kotlin, Jetpack Compose, Material
 - Five saved accent themes: Neon Blue, Cyber Purple, Emerald Green, Crimson Red and Golden Amber.
 - Media3 playback queue: selecting an item queues the visible list and supports next/previous queue navigation.
 - Playback UI connects to a MediaSessionService, providing the foundation for background playback and system media controls.
+- Full-screen video player mode and Android Picture-in-Picture entry when a video is playing and the user leaves the app.
 - GitHub Actions assembles a debug APK and uploads it as a downloadable workflow artifact.
 
 ## Build and download
@@ -32,7 +33,7 @@ The output APK is normally generated at `app/build/outputs/apk/debug/app-debug.a
 
 This is an active development build, not yet a production-ready release. The latest code must pass CI and still needs real-device testing. The following remain planned or incomplete:
 - Verify background playback, notification controls, audio focus and playback restoration on a real device.
-- Full-screen video, picture-in-picture and orientation handling.
+- Verify full-screen video and Picture-in-Picture behavior on real devices, including orientation and system UI interactions.
 - Subtitle selection and synchronization controls.
 - Audio equalizer and effects lifecycle.
 - Robust metadata/MIME-type detection, format-specific error handling and accessibility polish.
