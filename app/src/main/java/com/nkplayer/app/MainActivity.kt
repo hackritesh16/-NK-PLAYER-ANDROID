@@ -40,6 +40,7 @@ import androidx.media3.session.SessionToken
 import androidx.media3.ui.PlayerView
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import kotlinx.coroutines.delay
 
 private val Ink = Color(0xFF080B14)
 private val Panel = Color(0xFF131A2A)
@@ -131,6 +132,10 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     var fullScreenVideo by remember { mutableStateOf(false) }
     var subtitleDialog by remember { mutableStateOf(false) }
     var externalSubtitleName by remember { mutableStateOf<String?>(null) }
+    var playbackPosition by remember { mutableLongStateOf(0L) }
+    var playbackDuration by remember { mutableLongStateOf(0L) }
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekPreview by remember { mutableFloatStateOf(0f) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(store) {
@@ -140,6 +145,16 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     }
     LaunchedEffect(tracks, libraryLoaded) {
         if (libraryLoaded) store.saveLibrary(tracks.map { it.saved() })
+    }
+    LaunchedEffect(player) {
+        while (true) {
+            if (!isSeeking) {
+                playbackPosition = player.currentPosition.coerceAtLeast(0L)
+                playbackDuration = player.duration.takeIf { it > 0L } ?: 0L
+                seekPreview = if (playbackDuration > 0L) playbackPosition.toFloat() / playbackDuration else 0f
+            }
+            delay(500)
+        }
     }
     LaunchedEffect(themeName) { store.saveTheme(themeName) }
 
@@ -294,12 +309,34 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 Spacer(Modifier.width(8.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(track.name, color = Color.White, maxLines = 1, fontWeight = FontWeight.SemiBold)
-                                    Text("SELECTED MEDIA", color = accent, fontSize = 9.sp, letterSpacing = 1.2.sp)
+                                    Text(if (player.isPlaying) "NOW PLAYING" else "PLAYER READY", color = accent, fontSize = 9.sp, letterSpacing = 1.2.sp)
+                                }
+                                IconButton(onClick = { player.seekToPreviousMediaItem() }) {
+                                    Icon(Icons.Default.SkipPrevious, null, tint = Color.White)
                                 }
                                 IconButton(onClick = { if (player.isPlaying) player.pause() else player.play() }) {
                                     Icon(if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = accent)
                                 }
-                                IconButton(onClick = { player.seekToNextMediaItem() }) { Icon(Icons.Default.SkipNext, null, tint = Color.White) }
+                                IconButton(onClick = { player.seekToNextMediaItem() }) {
+                                    Icon(Icons.Default.SkipNext, null, tint = Color.White)
+                                }
+                            }
+                            Slider(
+                                value = seekPreview.coerceIn(0f, 1f),
+                                onValueChange = {
+                                    isSeeking = true
+                                    seekPreview = it
+                                },
+                                onValueChangeFinished = {
+                                    if (playbackDuration > 0L) player.seekTo((seekPreview * playbackDuration).toLong())
+                                    isSeeking = false
+                                },
+                                enabled = playbackDuration > 0L,
+                                colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent, inactiveTrackColor = Color(0xFF344055))
+                            )
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(formatTime(if (isSeeking) (seekPreview * playbackDuration).toLong() else playbackPosition), color = Color.LightGray, fontSize = 10.sp)
+                                Text(formatTime(playbackDuration), color = Color.LightGray, fontSize = 10.sp)
                             }
                             if (isVideo(track.uri)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
@@ -459,6 +496,16 @@ private fun MediaList(items: List<Track>, selected: Track?, accent: Color, onPic
             }
         }
     }
+}
+
+private fun formatTime(milliseconds: Long): String {
+    if (milliseconds <= 0L) return "00:00"
+    val totalSeconds = milliseconds / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds)
+    else "%02d:%02d".format(minutes, seconds)
 }
 
 private fun isVideo(uri: String): Boolean {
