@@ -59,7 +59,9 @@ class AudioFxController(context: Context) {
         equalizer = runCatching { Equalizer(0, sessionId) }.getOrNull()
         bassBoost = runCatching { BassBoost(0, sessionId) }.getOrNull()
         virtualizer = runCatching { Virtualizer(0, sessionId) }.getOrNull()
-        applySaved()
+        // Audio effects are optional and vendor implementations vary widely.
+        // Never allow an unsupported effect API to crash the playback service.
+        runCatching { applySaved() }
     }
 
     fun release() {
@@ -85,11 +87,11 @@ class AudioFxController(context: Context) {
             }
         }
         val bass = bassBoost
-        if (bass != null && bass.strengthSupported) {
+        if (bass != null && runCatching { bass.strengthSupported }.getOrDefault(false)) {
             runCatching { bass.setStrength(prefs.getInt(KEY_BASS, 0).coerceIn(0, 1000).toShort()) }
         }
         val virt = virtualizer
-        if (virt != null && virt.strengthSupported) {
+        if (virt != null && runCatching { virt.strengthSupported }.getOrDefault(false)) {
             runCatching { virt.setStrength(prefs.getInt(KEY_VIRT, 0).coerceIn(0, 1000).toShort()) }
         }
         setEffectsEnabled(enabled)
@@ -133,14 +135,14 @@ class AudioFxController(context: Context) {
         val clamped = strength.coerceIn(0, 1000)
         prefs.edit().putInt(KEY_BASS, clamped).apply()
         val bass = bassBoost ?: return
-        if (bass.strengthSupported) runCatching { bass.setStrength(clamped.toShort()) }
+        if (runCatching { bass.strengthSupported }.getOrDefault(false)) runCatching { bass.setStrength(clamped.toShort()) }
     }
 
     fun setVirtualizer(strength: Int) {
         val clamped = strength.coerceIn(0, 1000)
         prefs.edit().putInt(KEY_VIRT, clamped).apply()
         val virt = virtualizer ?: return
-        if (virt.strengthSupported) runCatching { virt.setStrength(clamped.toShort()) }
+        if (runCatching { virt.strengthSupported }.getOrDefault(false)) runCatching { virt.setStrength(clamped.toShort()) }
     }
 
     fun reset() {
@@ -167,9 +169,9 @@ class AudioFxController(context: Context) {
             result.putIntArray("levels", IntArray(bands) { eq.getBandLevel(it.toShort()).toInt() })
             result.putStringArray("presets", Array(eq.numberOfPresets.toInt()) { eq.getPresetName(it.toShort()) })
         }
-        result.putBoolean("bassSupported", bassBoost?.strengthSupported == true)
+        result.putBoolean("bassSupported", runCatching { bassBoost?.strengthSupported == true }.getOrDefault(false))
         result.putInt("bass", prefs.getInt(KEY_BASS, 0))
-        result.putBoolean("virtSupported", virtualizer?.strengthSupported == true)
+        result.putBoolean("virtSupported", runCatching { virtualizer?.strengthSupported == true }.getOrDefault(false))
         result.putInt("virt", prefs.getInt(KEY_VIRT, 0))
         return result
     }

@@ -64,6 +64,7 @@ private data class Track(val uri: String, val name: String, val mimeType: String
 class MainActivity : ComponentActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private val controllerState = mutableStateOf<MediaController?>(null)
+    private val controllerError = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,9 +79,17 @@ class MainActivity : ComponentActivity() {
                     Surface(Modifier.fillMaxSize(), color = Ink) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator(color = Cyan)
-                                Spacer(Modifier.height(12.dp))
-                                Text("Connecting NK PLAYER…", color = Color.White)
+                                if (controllerError.value == null) {
+                                    CircularProgressIndicator(color = Cyan)
+                                    Spacer(Modifier.height(12.dp))
+                                    Text("Connecting NK PLAYER…", color = Color.White)
+                                } else {
+                                    Text("Player engine could not start", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(controllerError.value.orEmpty(), color = Color.LightGray)
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("Please send this message to support: " + controllerError.value.orEmpty(), color = Cyan)
+                                }
                             }
                         }
                     }
@@ -88,7 +97,7 @@ class MainActivity : ComponentActivity() {
             } else {
                 NkPlayerApp(
                     player = player,
-                    store = LibraryStore(this),
+                    store = remember { LibraryStore(this) },
                     onPersistPermission = { uri ->
                         runCatching {
                             contentResolver.takePersistableUriPermission(
@@ -102,7 +111,11 @@ class MainActivity : ComponentActivity() {
 
         future.addListener({
             runOnUiThread {
-                controllerState.value = runCatching { future.get() }.getOrNull()
+                val connected = runCatching { future.get() }
+                controllerState.value = connected.getOrNull()
+                controllerError.value = connected.exceptionOrNull()?.let { error ->
+                    error.cause?.localizedMessage ?: error.localizedMessage ?: "Unknown media service error"
+                }
             }
         }, MoreExecutors.directExecutor())
     }

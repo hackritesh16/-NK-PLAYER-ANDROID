@@ -51,7 +51,7 @@ This is an active development build, not yet a production-ready release. The lat
 - Verify background playback, notification controls, audio focus and playback restoration on a real device (manifest declarations are present; device behavior still needs testing).
 - Verify full-screen video and Picture-in-Picture behavior on real devices, including orientation and system UI interactions.
 - Subtitle synchronization/offset controls and broader subtitle-format support.
-- Verify equalizer/bass/virtualizer behaviour on real devices (some devices or audio routes ignore platform effects).
+- Audio-effect initialization and vendor capability checks are guarded so unsupported Equalizer/Bass Boost/Virtualizer APIs do not take down the playback service; verify effect behaviour on real devices (some devices or routes ignore platform effects).
 - Robust metadata/MIME-type detection, format-specific error handling and accessibility polish.
 - Continue the broader UI redesign across Audio, Video and Studio tabs; verify responsive layout and accessibility polish.
 - Automated UI tests, release signing and release APK.

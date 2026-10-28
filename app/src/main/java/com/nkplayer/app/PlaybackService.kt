@@ -43,10 +43,10 @@ class PlaybackService : MediaSessionService() {
         fx = effects
         player.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                effects.attach(audioSessionId)
+                runCatching { effects.attach(audioSessionId) }
             }
         })
-        effects.attach(player.audioSessionId)
+        runCatching { effects.attach(player.audioSessionId) }
 
         val openApp = PendingIntent.getActivity(
             this,
