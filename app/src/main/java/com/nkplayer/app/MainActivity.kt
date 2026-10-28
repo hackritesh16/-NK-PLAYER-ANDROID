@@ -3,6 +3,9 @@ package com.nkplayer.app
 import android.content.ComponentName
 import android.net.Uri
 import android.os.Bundle
+import android.app.PictureInPictureParams
+import android.content.pm.PackageManager
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -25,6 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -87,6 +92,22 @@ class MainActivity : ComponentActivity() {
         }, MoreExecutors.directExecutor())
     }
 
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        val player = controllerState.value ?: return
+        val path = player.currentMediaItem?.localConfiguration?.uri?.lastPathSegment.orEmpty().lowercase()
+        val isVideo = listOf(".mp4", ".mkv", ".webm", ".mov", ".avi", ".3gp", ".m4v")
+            .any(path::endsWith)
+        if (isVideo && player.isPlaying && android.os.Build.VERSION.SDK_INT >= 26 &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+            runCatching {
+                enterPictureInPictureMode(
+                    PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
+                )
+            }
+        }
+    }
+
     override fun onDestroy() {
         controllerState.value = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
@@ -104,6 +125,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     var query by remember { mutableStateOf("") }
     var themeName by remember { mutableStateOf("Neon Blue") }
     var libraryLoaded by remember { mutableStateOf(false) }
+    var fullScreenVideo by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(store) {
@@ -249,6 +271,13 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 IconButton(onClick = { player.seekToNextMediaItem() }) { Icon(Icons.Default.SkipNext, null, tint = Color.White) }
                             }
                             if (isVideo(track.uri)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    TextButton(onClick = { fullScreenVideo = true }) {
+                                        Icon(Icons.Default.Fullscreen, contentDescription = null, tint = accent)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("FULL SCREEN", color = accent)
+                                    }
+                                }
                                 AndroidView(factory = { context -> PlayerView(context).apply { this.player = player; useController = true } },
                                     update = { it.player = player }, modifier = Modifier.fillMaxWidth().height(190.dp))
                             }
@@ -256,6 +285,26 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                     }
                 }
                 Spacer(Modifier.height(8.dp))
+            }
+        }
+        if (fullScreenVideo && selected?.let { isVideo(it.uri) } == true) {
+            Dialog(
+                onDismissRequest = { fullScreenVideo = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+            ) {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    AndroidView(
+                        factory = { context -> PlayerView(context).apply { this.player = player; useController = true } },
+                        update = { it.player = player },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    IconButton(
+                        onClick = { fullScreenVideo = false },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Exit full screen", tint = Color.White)
+                    }
+                }
             }
         }
     }
