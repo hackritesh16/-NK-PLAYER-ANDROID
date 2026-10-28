@@ -13,6 +13,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Verify UI/UX Pro Max skill
+        run: |
+          python3 -m py_compile .agents/skills/ui-ux-pro-max/scripts/*.py
+          python3 .agents/skills/ui-ux-pro-max/scripts/search.py "native media player accessible controls" --stack jetpack-compose
+          python3 .agents/skills/ui-ux-pro-max/scripts/search.py "mobile app contrast touch target accessibility" --domain ux
+          python3 .agents/skills/ui-ux-pro-max/scripts/search.py "dark media player android interface" --design-system --project-name "NK PLAYER"
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
