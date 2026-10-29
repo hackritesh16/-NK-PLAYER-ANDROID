@@ -81,6 +81,12 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
+            var previousCrash by remember {
+                mutableStateOf(
+                    getSharedPreferences(NKPlayerApplication.PREFS, MODE_PRIVATE)
+                        .getString(NKPlayerApplication.KEY_LAST_CRASH, null)
+                )
+            }
             val player = controllerState.value
             if (player == null) {
                 MaterialTheme(colorScheme = darkColorScheme(primary = Cyan, background = Ink, surface = Panel)) {
@@ -113,6 +119,42 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                )
+            }
+
+            previousCrash?.let { report ->
+                AlertDialog(
+                    onDismissRequest = { },
+                    title = { Text("NK PLAYER crash report") },
+                    text = {
+                        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                            Text(
+                                "A previous launch crashed. Copy this report and send it for diagnosis.",
+                                color = Color(0xFFB7C5D8)
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text(report.takeLast(7000), fontSize = 11.sp, color = Color.White)
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("NK PLAYER crash log", report))
+                            getSharedPreferences(NKPlayerApplication.PREFS, MODE_PRIVATE).edit()
+                                .remove(NKPlayerApplication.KEY_LAST_CRASH).apply()
+                            previousCrash = null
+                        }) { Text("COPY LOG") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            getSharedPreferences(NKPlayerApplication.PREFS, MODE_PRIVATE).edit()
+                                .remove(NKPlayerApplication.KEY_LAST_CRASH).apply()
+                            previousCrash = null
+                        }) { Text("CLOSE") }
+                    },
+                    containerColor = Panel,
+                    titleContentColor = Color.White,
+                    textContentColor = Color(0xFFD5DEEB)
                 )
             }
         }
