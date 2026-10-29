@@ -76,6 +76,7 @@ class MainActivity : ComponentActivity() {
         val future = startup.getOrNull()
         controllerFuture = future
         controllerError.value = startup.exceptionOrNull()?.let { error ->
+            android.util.Log.e("NKPlayer", "Unable to initialize media controller", error)
             error.cause?.localizedMessage ?: error.localizedMessage ?: "Unable to initialize media controller"
         }
 
@@ -121,6 +122,7 @@ class MainActivity : ComponentActivity() {
                 val connected = runCatching { future.get() }
                 controllerState.value = connected.getOrNull()
                 controllerError.value = connected.exceptionOrNull()?.let { error ->
+                    android.util.Log.e("NKPlayer", "Media controller connection failed", error)
                     error.cause?.localizedMessage ?: error.localizedMessage ?: "Unknown media service error"
                 }
             }
