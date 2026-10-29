@@ -27,38 +27,52 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this).build().apply {
-            setAudioAttributes(
+        // Optional vendor audio effects are attached when a real audio session
+        // appears, rather than being created during cold app launch.
+        var createdPlayer: ExoPlayer? = null
+        try {
+            val player = ExoPlayer.Builder(this).build()
+            createdPlayer = player
+            player.setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .build(),
                 true
             )
-            setHandleAudioBecomingNoisy(true)
-            setWakeMode(C.WAKE_MODE_LOCAL)
+            player.setHandleAudioBecomingNoisy(true)
+            player.setWakeMode(C.WAKE_MODE_LOCAL)
+
+            val effects = AudioFxController(this)
+            fx = effects
+            player.addListener(object : Player.Listener {
+                override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                    runCatching { effects.attach(audioSessionId) }
+                        .onFailure { android.util.Log.w("NKPlayer", "Audio effects unavailable", it) }
+                }
+            })
+
+            val openApp = PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            mediaSession = MediaSession.Builder(this, player)
+                .setCallback(FxCallback(effects))
+                .setSessionActivity(openApp)
+                .build()
+        } catch (error: Exception) {
+            // Exceptions in Service.onCreate can kill the process before the
+            // launcher can render a useful error. Keep the cause in logcat.
+            android.util.Log.e("NKPlayer", "Playback service startup failed", error)
+            runCatching { mediaSession?.release() }
+            mediaSession = null
+            runCatching { createdPlayer?.release() }
+            runCatching { fx?.release() }
+            fx = null
+            stopSelf()
         }
-
-        val effects = AudioFxController(this)
-        fx = effects
-        player.addListener(object : Player.Listener {
-            override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                runCatching { effects.attach(audioSessionId) }
-            }
-        })
-        // Effects are initialized only after ExoPlayer provides a real audio session.
-        // Avoid touching vendor audio-effect implementations during app startup.
-
-        val openApp = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        mediaSession = MediaSession.Builder(this, player)
-            .setCallback(FxCallback(effects))
-            .setSessionActivity(openApp)
-            .build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
