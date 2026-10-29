@@ -53,10 +53,11 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.delay
 
-private val Ink = Color(0xFF080B14)
-private val Panel = Color(0xFF131A2A)
-private val Cyan = Color(0xFF48E5FF)
-private val Violet = Color(0xFF9B72FF)
+private val Ink = Color(0xFF070A12)
+private val Panel = Color(0xB8141C2D)
+private val GlassStroke = Color(0x26FFFFFF)
+private val Cyan = Color(0xFF55E8FF)
+private val Violet = Color(0xFFAB8AFF)
 private data class Track(val uri: String, val name: String, val mimeType: String? = null) {
     fun saved() = SavedTrack(uri, name, mimeType)
 }
@@ -345,8 +346,13 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
 
     MaterialTheme(colorScheme = darkColorScheme(primary = accent, secondary = Violet, background = Ink, surface = Panel)) {
         Scaffold(containerColor = Ink, bottomBar = {
+            Surface(
+                color = Color(0xD90B1220),
+                border = androidx.compose.foundation.BorderStroke(1.dp, GlassStroke),
+                shadowElevation = 18.dp
+            ) {
             NavigationBar(
-                containerColor = Color(0xFF0E1522),
+                containerColor = Color.Transparent,
                 tonalElevation = 0.dp
             ) {
                 listOf("Home", "Audio", "Video", "Studio").forEachIndexed { index, label ->
@@ -372,10 +378,20 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                     )
                 }
             }
+            }
         }) { padding ->
             Column(
                 Modifier.fillMaxSize().padding(padding)
-                    .background(Brush.verticalGradient(listOf(Ink, Color(0xFF0C1424), Ink)))
+                    .background(
+                        Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.0f to Color(0xFF0A1220),
+                                0.38f to Color(0xFF101629),
+                                0.72f to Color(0xFF0B1220),
+                                1.0f to Ink
+                            )
+                        )
+                    )
                     .padding(horizontal = 18.dp)
             ) {
                 Spacer(Modifier.height(14.dp))
@@ -384,10 +400,11 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        color = accent.copy(alpha = 0.11f),
-                        shape = RoundedCornerShape(15.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.25f)),
-                        modifier = Modifier.size(50.dp)
+                        color = accent.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(17.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.38f)),
+                        shadowElevation = 10.dp,
+                        modifier = Modifier.size(52.dp)
                     ) {
                         Image(
                             painter = painterResource(id = R.mipmap.ic_launcher),
@@ -407,7 +424,11 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 letterSpacing = 1.55.sp, fontWeight = FontWeight.Bold)
                         }
                     }
-                    Surface(color = Color(0xFF151E2D), shape = RoundedCornerShape(12.dp)) {
+                    Surface(
+                        color = Color(0xB81A2638),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, GlassStroke)
+                    ) {
                         Icon(Icons.Default.GraphicEq, contentDescription = "Audio player",
                             tint = accent, modifier = Modifier.padding(11.dp).size(20.dp))
                     }
@@ -508,8 +529,18 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                 }
                 selected?.let { track ->
                     Spacer(Modifier.height(8.dp))
-                    Surface(color = Panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp)) {
+                    Surface(
+                        color = Color(0xC9141C2D),
+                        shape = RoundedCornerShape(22.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.22f)),
+                        shadowElevation = 16.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            Modifier.background(
+                                Brush.linearGradient(listOf(Color(0x241F3C55), Color(0x161A2440), Color.Transparent))
+                            ).padding(13.dp)
+                        ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(if (isVideo(track)) Icons.Default.Movie else Icons.Default.MusicNote, null, tint = accent, modifier = Modifier.size(26.dp))
                                 Spacer(Modifier.width(8.dp))
@@ -816,15 +847,16 @@ private fun LibraryTabHeader(
 @Composable
 private fun HomeHero(accent: Color, onImport: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(28.dp),
-        color = Panel,
-        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.22f)),
+        shape = RoundedCornerShape(30.dp),
+        color = Color(0xB8172336),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.30f)),
+        shadowElevation = 20.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         Box(
             Modifier.background(
                 Brush.linearGradient(
-                    listOf(Color(0xFF18334B), Color(0xFF211B3D), Color(0xFF111827))
+                    listOf(Color(0xFF163A51), Color(0xFF292044), Color(0xFF111827))
                 )
             )
         ) {
@@ -880,9 +912,10 @@ private fun HomeHero(accent: Color, onImport: () -> Unit) {
 @Composable
 private fun StatCard(label: String, value: String, modifier: Modifier, accent: Color) {
     Surface(
-        color = Color(0xFF111827),
-        shape = RoundedCornerShape(17.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF273449)),
+        color = Color(0xB8172131),
+        shape = RoundedCornerShape(18.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, GlassStroke),
+        shadowElevation = 8.dp,
         modifier = modifier
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 13.dp)) {
@@ -903,7 +936,7 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, accent: Color) {
         singleLine = true,
         placeholder = { Text("Search imported media…", color = Color(0xFF8290A5), fontSize = 13.sp) },
         leadingIcon = { Icon(Icons.Default.Search, null, tint = accent) },
-        shape = RoundedCornerShape(17.dp),
+        shape = RoundedCornerShape(19.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = accent,
             unfocusedBorderColor = Color(0xFF29364A),
@@ -953,10 +986,10 @@ private fun MediaList(
             items(items, key = { it.uri }) { track ->
                 val active = track == selected
                 Surface(
-                    color = if (active) Color(0xFF152B3A) else Color(0xFF111827),
-                    shape = RoundedCornerShape(17.dp),
+                    color = if (active) Color(0xD91B3546) else Color(0xA8172131),
+                    shape = RoundedCornerShape(19.dp),
                     border = androidx.compose.foundation.BorderStroke(
-                        1.dp, if (active) accent.copy(alpha = 0.45f) else Color(0xFF222E40)
+                        1.dp, if (active) accent.copy(alpha = 0.58f) else GlassStroke
                     ),
                     modifier = Modifier.fillMaxWidth().clickable { onPick(track) }
                 ) {
