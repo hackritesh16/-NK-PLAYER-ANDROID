@@ -5,6 +5,7 @@ import android.app.PictureInPictureParams
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -90,6 +91,7 @@ class MainActivity : ComponentActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private val controllerState = mutableStateOf<MediaController?>(null)
     private val controllerError = mutableStateOf<String?>(null)
+    private val pipState = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -116,6 +118,7 @@ class MainActivity : ComponentActivity() {
                 NkPlayerApp(
                     player = player,
                     store = remember { LibraryStore(this) },
+                    inPip = pipState.value,
                     onPersistPermission = { uri ->
                         runCatching {
                             contentResolver.takePersistableUriPermission(
@@ -138,6 +141,11 @@ class MainActivity : ComponentActivity() {
         }, MoreExecutors.directExecutor())
     }
 
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        pipState.value = isInPictureInPictureMode
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val player = controllerState.value ?: return
@@ -147,8 +155,16 @@ class MainActivity : ComponentActivity() {
         if (isVideo && player.isPlaying && android.os.Build.VERSION.SDK_INT >= 26 &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
             runCatching {
+                // Window shape follows the video's real size (Android only accepts roughly 1:2.39 .. 2.39:1).
+                val size = player.videoSize
+                val swapped = size.unappliedRotationDegrees == 90 || size.unappliedRotationDegrees == 270
+                val rawWidth = if (swapped) size.height.toFloat() else size.width * size.pixelWidthHeightRatio
+                val rawHeight = if (swapped) size.width * size.pixelWidthHeightRatio else size.height.toFloat()
+                val ratio = if (rawWidth > 0f && rawHeight > 0f) (rawWidth / rawHeight).coerceIn(0.5f, 2.3f) else 16f / 9f
                 enterPictureInPictureMode(
-                    PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
+                    PictureInPictureParams.Builder()
+                        .setAspectRatio(Rational((ratio * 1000f).toInt(), 1000))
+                        .build()
                 )
             }
         }
@@ -189,7 +205,7 @@ private fun StartupScreen(error: String?) {
 }
 
 @Composable
-private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission: (Uri) -> Unit) {
+private fun NkPlayerApp(player: Player, store: LibraryStore, inPip: Boolean, onPersistPermission: (Uri) -> Unit) {
     var tracks by remember { mutableStateOf(emptyList<Track>()) }
     var deviceTracks by remember { mutableStateOf(emptyList<Track>()) }
     var selected by remember { mutableStateOf<Track?>(null) }
@@ -205,6 +221,9 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snap = rememberPlaybackSnapshot(player)
+
+    // In the small floating (picture-in-picture) window only the video is shown.
+    val pipVideo = inPip && selected?.let { isVideo(it) } == true
 
     // Manually imported files (persisted) plus everything found on the device (re-scanned each time).
     val libraryTracks = remember(tracks, deviceTracks) { (tracks + deviceTracks).distinctBy { it.uri } }
@@ -514,7 +533,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                         palette = palette,
                         sleepLabel = sleepLabel,
                         subtitleName = externalSubtitleName,
-                        showInlineVideo = !fullScreenVideo,
+                        showInlineVideo = !fullScreenVideo && !pipVideo,
                         onClose = { nowPlayingOpen = false },
                         onSpeed = cycleSpeed,
                         onSleep = cycleSleep,
@@ -587,13 +606,23 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                 confirmButton = { TextButton(onClick = { playbackError = null }) { Text("OK", color = accent) } }
             )
         }
-        if (fullScreenVideo && selected?.let { isVideo(it) } == true) {
+        if (fullScreenVideo && !pipVideo && selected?.let { isVideo(it) } == true) {
             NKFullScreenVideo(
                 player = player,
                 title = selected?.name.orEmpty(),
                 accent = accent,
                 onClose = { fullScreenVideo = false }
             )
+        }
+        // Floating window (picture-in-picture): nothing but the video, filling the whole small window.
+        if (pipVideo) {
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                AndroidView(
+                    factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = false } },
+                    update = { it.player = player },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
 }
