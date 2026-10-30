@@ -16,6 +16,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -797,11 +800,26 @@ private fun StudioHeader(accent: Color, themeName: String) {
 
 @Composable
 private fun ThemeOptionCard(name: String, swatch: Color, selected: Boolean, onClick: () -> Unit) {
+    val cardTint by animateColorAsState(
+        targetValue = if (selected) swatch.copy(alpha = 0.12f) else Panel,
+        animationSpec = tween(NKDesignTokens.Motion.standardMillis),
+        label = "theme-card-tint"
+    )
+    val cardStroke by animateColorAsState(
+        targetValue = if (selected) swatch.copy(alpha = 0.85f) else Color(0xFF263247),
+        animationSpec = tween(NKDesignTokens.Motion.standardMillis),
+        label = "theme-card-stroke"
+    )
+    val cardElevation by animateDpAsState(
+        targetValue = if (selected) 8.dp else 2.dp,
+        animationSpec = tween(NKDesignTokens.Motion.standardMillis),
+        label = "theme-card-elevation"
+    )
     NKGlassCard(
-        tint = if (selected) swatch.copy(alpha = 0.12f) else Panel,
+        tint = cardTint,
         shape = RoundedCornerShape(NKDesignTokens.Radius.medium),
-        stroke = if (selected) swatch.copy(alpha = 0.85f) else Color(0xFF263247),
-        elevation = if (selected) 8.dp else 2.dp,
+        stroke = cardStroke,
+        elevation = cardElevation,
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
     ) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -998,11 +1016,26 @@ private fun MediaList(
         ) {
             items(items, key = { it.uri }) { track ->
                 val active = track == selected
+                val rowTint by animateColorAsState(
+                    targetValue = if (active) Color(0xD91B3546) else Color(0xA8172131),
+                    animationSpec = tween(NKDesignTokens.Motion.standardMillis),
+                    label = "media-row-tint"
+                )
+                val rowStroke by animateColorAsState(
+                    targetValue = if (active) accent.copy(alpha = 0.58f) else GlassStroke,
+                    animationSpec = tween(NKDesignTokens.Motion.standardMillis),
+                    label = "media-row-stroke"
+                )
+                val rowElevation by animateDpAsState(
+                    targetValue = if (active) 8.dp else 2.dp,
+                    animationSpec = tween(NKDesignTokens.Motion.standardMillis),
+                    label = "media-row-elevation"
+                )
                 NKGlassCard(
-                    tint = if (active) Color(0xD91B3546) else Color(0xA8172131),
+                    tint = rowTint,
                     shape = RoundedCornerShape(NKDesignTokens.Radius.medium),
-                    stroke = if (active) accent.copy(alpha = 0.58f) else GlassStroke,
-                    elevation = if (active) 8.dp else 2.dp,
+                    stroke = rowStroke,
+                    elevation = rowElevation,
                     modifier = Modifier.fillMaxWidth().clickable { onPick(track) }
                 ) {
                     Row(
