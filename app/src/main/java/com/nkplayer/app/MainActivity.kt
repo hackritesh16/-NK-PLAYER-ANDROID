@@ -3,6 +3,7 @@ package com.nkplayer.app
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.os.Bundle
@@ -206,6 +207,21 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     var themeName by remember { mutableStateOf("Neon Blue") }
     var libraryLoaded by remember { mutableStateOf(false) }
     var fullScreenVideo by remember { mutableStateOf(false) }
+    val activity = context as? ComponentActivity
+    val previousRequestedOrientation = remember(activity) { activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    LaunchedEffect(fullScreenVideo, playbackUiRevision) {
+        val host = activity ?: return@LaunchedEffect
+        if (fullScreenVideo && selected?.let { isVideo(it) } == true) {
+            val videoSize = player.videoSize
+            host.requestedOrientation = if (videoSize.width > videoSize.height) {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            }
+        } else {
+            host.requestedOrientation = previousRequestedOrientation
+        }
+    }
     var subtitleDialog by remember { mutableStateOf(false) }
     var externalSubtitleName by remember { mutableStateOf<String?>(null) }
     var playbackPosition by remember { mutableLongStateOf(0L) }
@@ -223,6 +239,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             override fun onRepeatModeChanged(repeatMode: Int) { playbackUiRevision++ }
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) { playbackUiRevision++ }
             override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) { playbackUiRevision++ }
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { playbackUiRevision++ }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val currentUri = mediaItem?.localConfiguration?.uri?.toString()
                 selected = tracks.firstOrNull { it.uri == currentUri }
