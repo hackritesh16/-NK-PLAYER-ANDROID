@@ -1,0 +1,6 @@
+EXAMPLE FILE (OPTIONAL) - sirf tab chahiye jab app Play Store par daalna ho.
+
+Yahan jaayega: Play Store icon
+Size: 512 x 512 px
+Format: PNG, poora bhara hua square (transparent NAHI), kinare khud gol mat karna
+Final naam: nk_playstore_icon.png

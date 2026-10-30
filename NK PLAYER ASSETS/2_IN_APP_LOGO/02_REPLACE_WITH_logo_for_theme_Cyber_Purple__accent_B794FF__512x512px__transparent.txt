@@ -1,0 +1,6 @@
+EXAMPLE FILE - ise delete karke apni PNG upload karo.
+
+Theme: Cyber Purple (accent colour #B794FF)
+Size: 512 x 512 px
+Format: PNG, TRANSPARENT background (bg remove), kinare ~10% khaali
+Final naam: nk_logo_cyber_purple.png
