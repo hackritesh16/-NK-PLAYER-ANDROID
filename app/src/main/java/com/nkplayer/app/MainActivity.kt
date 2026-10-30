@@ -363,10 +363,11 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
 
     MaterialTheme(colorScheme = darkColorScheme(primary = accent, secondary = Violet, background = Ink, surface = Panel)) {
         Scaffold(containerColor = Ink, bottomBar = {
-            Surface(
-                color = Color(0xD90B1220),
-                border = androidx.compose.foundation.BorderStroke(1.dp, GlassStroke),
-                shadowElevation = 18.dp
+            NKGlassCard(
+                tint = Color(0xD90B1220),
+                shape = RoundedCornerShape(24.dp),
+                stroke = GlassStroke,
+                elevation = 18.dp
             ) {
             NavigationBar(
                 containerColor = Color.Transparent,
@@ -546,11 +547,11 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                 }
                 selected?.let { track ->
                     Spacer(Modifier.height(8.dp))
-                    Surface(
-                        color = Color(0xC9141C2D),
+                    NKGlassCard(
+                        tint = Color(0xC9141C2D),
                         shape = RoundedCornerShape(22.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.22f)),
-                        shadowElevation = 16.dp,
+                        stroke = accent.copy(alpha = 0.22f),
+                        elevation = 16.dp,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -948,12 +949,12 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, accent: Color) {
         singleLine = true,
         placeholder = { Text("Search imported media…", color = Color(0xFF8290A5), fontSize = 13.sp) },
         leadingIcon = { Icon(Icons.Default.Search, null, tint = accent) },
-        shape = RoundedCornerShape(19.dp),
+        shape = RoundedCornerShape(NKDesignTokens.Radius.medium),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = accent,
-            unfocusedBorderColor = Color(0xFF29364A),
-            focusedContainerColor = Color(0xFF111827),
-            unfocusedContainerColor = Color(0xFF0F1624),
+            unfocusedBorderColor = NKDesignTokens.borderStrong,
+            focusedContainerColor = NKDesignTokens.surfaceRaised,
+            unfocusedContainerColor = NKDesignTokens.surfaceMuted,
             focusedTextColor = Color.White,
             unfocusedTextColor = Color.White,
             cursorColor = accent
