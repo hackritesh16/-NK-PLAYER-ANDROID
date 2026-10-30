@@ -39,8 +39,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -226,14 +224,17 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val previousRequestedOrientation = remember(activity) { activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    // Fullscreen video: rotate to the video's real orientation (landscape video -> landscape with
+    // automatic left/right rotation, portrait video -> portrait) and restore the previous orientation on exit.
     LaunchedEffect(fullScreenVideo, playbackUiRevision) {
         val host = activity ?: return@LaunchedEffect
         if (fullScreenVideo && selected?.let { isVideo(it) } == true) {
             val videoSize = player.videoSize
-            host.requestedOrientation = if (videoSize.width > videoSize.height) {
+            if (videoSize.width <= 0 || videoSize.height <= 0) return@LaunchedEffect // size not known yet
+            host.requestedOrientation = if (videoSize.width >= videoSize.height) {
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             } else {
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             }
         } else {
             host.requestedOrientation = previousRequestedOrientation
@@ -701,24 +702,12 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             )
         }
         if (fullScreenVideo && selected?.let { isVideo(it) } == true) {
-            Dialog(
-                onDismissRequest = { fullScreenVideo = false },
-                properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-            ) {
-                Box(Modifier.fillMaxSize().background(Color.Black)) {
-                    AndroidView(
-                        factory = { context -> PlayerView(context).apply { this.player = player; useController = true } },
-                        update = { it.player = player },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    IconButton(
-                        onClick = { fullScreenVideo = false },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Exit full screen", tint = Color.White)
-                    }
-                }
-            }
+            NKFullScreenVideo(
+                player = player,
+                title = selected?.name.orEmpty(),
+                accent = accent,
+                onClose = { fullScreenVideo = false }
+            )
         }
     }
 }
