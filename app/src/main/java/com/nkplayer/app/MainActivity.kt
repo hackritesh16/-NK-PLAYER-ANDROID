@@ -91,7 +91,13 @@ class MainActivity : ComponentActivity() {
                 )
             }
             val player = controllerState.value
-            if (player == null) {
+            if (previousCrash != null) {
+                // A crash report is waiting: show ONLY the report (plain dark screen) so the app cannot
+                // crash again before the report has been copied. The player UI starts after the dialog is closed.
+                MaterialTheme(colorScheme = darkColorScheme(primary = Cyan, background = Ink, surface = Panel)) {
+                    Surface(Modifier.fillMaxSize(), color = Ink) {}
+                }
+            } else if (player == null) {
                 MaterialTheme(colorScheme = darkColorScheme(primary = Cyan, background = Ink, surface = Panel)) {
                     Surface(Modifier.fillMaxSize(), color = Ink) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
