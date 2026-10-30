@@ -54,11 +54,11 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.delay
 
-private val Ink = Color(0xFF070A12)
-private val Panel = Color(0xB8141C2D)
-private val GlassStroke = Color(0x26FFFFFF)
-private val Cyan = Color(0xFF55E8FF)
-private val Violet = Color(0xFFAB8AFF)
+private val Ink = NKDesignTokens.canvas
+private val Panel = NKDesignTokens.surface
+private val GlassStroke = NKDesignTokens.border
+private val Cyan = NKDesignTokens.accentPrimary
+private val Violet = NKDesignTokens.accentSecondary
 private data class Track(val uri: String, val name: String, val mimeType: String? = null) {
     fun saved() = SavedTrack(uri, name, mimeType)
 }
@@ -796,13 +796,11 @@ private fun StudioHeader(accent: Color, themeName: String) {
 
 @Composable
 private fun ThemeOptionCard(name: String, swatch: Color, selected: Boolean, onClick: () -> Unit) {
-    Surface(
-        color = if (selected) swatch.copy(alpha = 0.12f) else Panel,
-        shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(
-            width = if (selected) 1.5.dp else 1.dp,
-            color = if (selected) swatch.copy(alpha = 0.85f) else Color(0xFF263247)
-        ),
+    NKGlassCard(
+        tint = if (selected) swatch.copy(alpha = 0.12f) else Panel,
+        shape = RoundedCornerShape(NKDesignTokens.Radius.medium),
+        stroke = if (selected) swatch.copy(alpha = 0.85f) else Color(0xFF263247),
+        elevation = if (selected) 8.dp else 2.dp,
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
     ) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -816,11 +814,8 @@ private fun ThemeOptionCard(name: String, swatch: Color, selected: Boolean, onCl
                 Text(name, color = Color.White, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = 13.sp)
                 Text(if (selected) "Currently active" else "Tap to apply this accent", color = Color.Gray, fontSize = 10.sp)
             }
-            if (selected) {
-                Icon(Icons.Default.CheckCircle, null, tint = swatch, modifier = Modifier.size(22.dp))
-            } else {
-                Icon(Icons.Default.ChevronRight, null, tint = Color.Gray)
-            }
+            if (selected) Icon(Icons.Default.CheckCircle, null, tint = swatch, modifier = Modifier.size(22.dp))
+            else Icon(Icons.Default.ChevronRight, null, tint = Color.Gray)
         }
     }
 }
@@ -863,19 +858,15 @@ private fun LibraryTabHeader(
 
 @Composable
 private fun HomeHero(accent: Color, onImport: () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(30.dp),
-        color = Color(0xB8172336),
-        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.30f)),
-        shadowElevation = 20.dp,
+    NKGlassCard(
+        shape = RoundedCornerShape(NKDesignTokens.Radius.hero),
+        tint = Color(0xB8172336),
+        stroke = accent.copy(alpha = 0.30f),
+        elevation = 20.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Box(
-            Modifier.background(
-                Brush.linearGradient(
-                    listOf(Color(0xFF163A51), Color(0xFF292044), Color(0xFF111827))
-                )
-            )
+        NKAuroraBackdrop(
+            colors = listOf(Color(0xFF163A51), Color(0xFF292044), Color(0xFF111827))
         ) {
             Column(Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -928,12 +919,11 @@ private fun HomeHero(accent: Color, onImport: () -> Unit) {
 
 @Composable
 private fun StatCard(label: String, value: String, modifier: Modifier, accent: Color) {
-    Surface(
-        color = Color(0xB8172131),
-        shape = RoundedCornerShape(18.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, GlassStroke),
-        shadowElevation = 8.dp,
-        modifier = modifier
+    NKGlassCard(
+        modifier = modifier,
+        shape = RoundedCornerShape(NKDesignTokens.Radius.medium),
+        tint = NKDesignTokens.surfaceMuted,
+        elevation = 8.dp
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 13.dp)) {
             Text(label, color = Color(0xFFA9B6C9), fontSize = 9.sp,
