@@ -1,8 +1,0 @@
-EXAMPLE FILE - ise delete karke apni PNG upload karo.
-
-Yahan jaayega: launcher icon ka FOREGROUND (logo)
-Size: 432 x 432 px
-Format: PNG, TRANSPARENT background
-Logo: beech ke ~280 x 280 px me. Chaaron taraf khaali jagah.
-Logo ke saath gol/chauras kinara, shadow ya bhara hua background MAT banao.
-Final naam: nk_launcher_foreground.png

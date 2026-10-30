@@ -1,7 +1,0 @@
-EXAMPLE FILE (OPTIONAL) - ise delete karke apni PNG upload karo, ya nahi banani to ise bas delete kar do.
-
-Yahan jaayega: Android 13+ ke themed icon ke liye logo ka SILHOUETTE
-Size: 432 x 432 px
-Format: PNG, TRANSPARENT background, logo SIRF SAFED (white) ek colour me, koi gradient nahi
-Logo: beech ke ~280 x 280 px me
-Final naam: nk_launcher_monochrome.png
