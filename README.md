@@ -28,7 +28,7 @@ The **Actions** tab runs `gradle assembleDebug` for pushes and pull requests to 
 
 - [Latest build runs](https://github.com/hackritesh16/-NK-PLAYER-ANDROID/actions)
 
-Local build requirements: JDK 17, Android SDK Platform 35, Gradle 8.9 and internet access (for the font download and Maven dependency resolution). Haze provides the Compose backdrop-capture and blur effect.
+Minimum supported OS: Android 12 (API 31). Local build requirements: JDK 17, Android SDK Platform 35, Gradle 8.9 and internet access (for the font download and Maven dependency resolution). Haze provides the Compose backdrop-capture and blur effect.
 
 ```bash
 gradle assembleDebug
