@@ -1,3 +1,5 @@
+import java.net.URL
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -40,7 +42,7 @@ val fetchFonts = tasks.register("fetchFonts") {
                 var attempt = 0
                 while (true) {
                     try {
-                        java.net.URL(url).openStream().use { input ->
+                        URL(url).openStream().use { input ->
                             target.outputStream().use { out -> input.copyTo(out) }
                         }
                         break
