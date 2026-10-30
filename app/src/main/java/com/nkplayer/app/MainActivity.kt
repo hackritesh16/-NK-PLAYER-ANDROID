@@ -403,7 +403,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             ) { padding ->
                 Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp)) {
                     Spacer(Modifier.height(8.dp))
-                    AppHeader(accent) { tab = 3 }
+                    AppHeader(accent, themeName) { tab = 3 }
                     Spacer(Modifier.height(12.dp))
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         when (tab) {
@@ -631,12 +631,21 @@ private fun playTrack(track: Track, queue: List<Track>, player: Player) {
 // Screens and components
 // ---------------------------------------------------------------------------------------------
 
+/** In-app logo: one PNG per theme (res/drawable-nodpi/nk_logo_*.png, installed from "NK PLAYER ASSETS"). */
+private fun logoFor(themeName: String): Int = when (themeName) {
+    "Cyber Purple" -> R.drawable.nk_logo_cyber_purple
+    "Emerald Green" -> R.drawable.nk_logo_emerald_green
+    "Crimson Red" -> R.drawable.nk_logo_crimson_red
+    "Golden Amber" -> R.drawable.nk_logo_golden_amber
+    else -> R.drawable.nk_logo_neon_blue
+}
+
 @Composable
-private fun AppHeader(accent: Color, onStudio: () -> Unit) {
+private fun AppHeader(accent: Color, themeName: String, onStudio: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(48.dp).glass(RoundedCornerShape(16.dp)).padding(4.dp)) {
             Image(
-                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                painter = painterResource(id = logoFor(themeName)),
                 contentDescription = "NK PLAYER logo",
                 modifier = Modifier.fillMaxSize()
             )
