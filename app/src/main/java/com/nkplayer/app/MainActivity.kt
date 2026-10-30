@@ -45,7 +45,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -381,6 +383,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
 
     BackHandler(enabled = nowPlayingOpen && !fullScreenVideo) { nowPlayingOpen = false }
 
+    val backdrop = rememberGlassBackdrop()
     NkTheme(palette) {
         GlassBackground(palette) {
             Scaffold(
@@ -397,11 +400,27 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                         selectedIndex = tab,
                         onSelect = { tab = it },
                         accent = accent,
+                        backdrop = backdrop,
                         modifier = Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp)
                     )
                 }
             ) { padding ->
-                Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp)) {
+                // With blur available, content runs underneath the floating bar (the bar blurs it);
+                // otherwise the layout is exactly build #70: content stops above the bar.
+                val under = backdrop.enabled
+                val barClear = padding.calculateBottomPadding()
+                val layoutDir = LocalLayoutDirection.current
+                Box(Modifier.fillMaxSize().graphicsLayer { }.glassSource(backdrop)) {
+                Column(
+                    Modifier.fillMaxSize()
+                        .padding(
+                            start = padding.calculateStartPadding(layoutDir),
+                            top = padding.calculateTopPadding(),
+                            end = padding.calculateEndPadding(layoutDir),
+                            bottom = if (under) 0.dp else barClear
+                        )
+                        .padding(horizontal = 18.dp)
+                ) {
                     Spacer(Modifier.height(8.dp))
                     AppHeader(accent, themeName) { tab = 3 }
                     Spacer(Modifier.height(12.dp))
@@ -410,7 +429,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                             0 -> LazyColumn(
                                 Modifier.fillMaxSize(),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
-                                contentPadding = PaddingValues(bottom = 8.dp)
+                                contentPadding = PaddingValues(bottom = 8.dp + if (under && selected == null) barClear else 0.dp)
                             ) {
                                 item { HomeHero(accent, importAll) }
                                 if (!mediaAccess) item { PermissionCard(accent, mediaDenied, requestAccess) }
@@ -445,7 +464,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 LazyColumn(
                                     Modifier.fillMaxSize(),
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = PaddingValues(bottom = 8.dp)
+                                    contentPadding = PaddingValues(bottom = 8.dp + if (under && selected == null) barClear else 0.dp)
                                 ) {
                                     item {
                                         LibraryHeader(
@@ -485,7 +504,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 Text("Equalizer, bass boost and virtualizer for all playback.",
                                     color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
                                 EqualizerSection(player = player, accent = accent)
-                                Spacer(Modifier.height(12.dp))
+                                Spacer(Modifier.height(12.dp + if (under && selected == null) barClear else 0.dp))
                             }
                         }
                     }
@@ -498,7 +517,8 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                             onNext = { player.seekToNextMediaItem() }
                         )
                     }
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(2.dp + if (under && selected != null) barClear else 0.dp))
+                }
                 }
             }
             AnimatedVisibility(

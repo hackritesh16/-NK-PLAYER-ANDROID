@@ -82,11 +82,13 @@ fun NKLiquidNavBar(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     accent: Color,
+    backdrop: GlassBackdrop? = null,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val barShape = RoundedCornerShape(36.dp)
+    val blurOn = backdrop?.enabled == true
     val count = items.size.coerceAtLeast(1)
     val padPx = with(density) { 8.dp.toPx() }
 
@@ -141,15 +143,19 @@ fun NKLiquidNavBar(
         modifier = modifier
             .fillMaxWidth()
             .height(72.dp)
-            .shadow(
-                elevation = 22.dp,
-                shape = barShape,
-                clip = false,
-                ambientColor = accent.copy(alpha = 0.35f),
-                spotColor = Color.Black
+            .then(
+                if (blurOn) Modifier.glassBarShadow(36.dp, accent)
+                else Modifier.shadow(
+                    elevation = 22.dp,
+                    shape = barShape,
+                    clip = false,
+                    ambientColor = accent.copy(alpha = 0.35f),
+                    spotColor = Color.Black
+                )
             )
             .clip(barShape)
-            .background(Color(0xCC0B1220))
+            .backdropBlur(backdrop, 36.dp)
+            .background(Color(if (blurOn) 0x80101A2EL else 0xCC0B1220L))
             .background(
                 Brush.verticalGradient(
                     listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.04f))
