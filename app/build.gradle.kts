@@ -69,6 +69,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("dev.chrisbanes.haze:haze:1.3.0")
+    implementation("dev.chrisbanes.haze:haze-materials:1.3.0")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.datastore:datastore-preferences:1.1.2")
     implementation("androidx.media3:media3-exoplayer:1.5.1")
