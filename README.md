@@ -1,62 +1,50 @@
 # NK PLAYER — Android
 
-A native Android audio/video player built with Kotlin, Jetpack Compose, Material 3 and AndroidX Media3.
+A native Android audio/video player built with Kotlin, Jetpack Compose, Material 3 and AndroidX Media3, with a dark glassmorphism interface.
 
-## Current development milestone: v0.4.0
+## Current development milestone: v0.5.0 (glass UI)
 
-### Implemented in source
-- Dark/neon interface with Home, Audio, Video and Studio tabs.
-- Import local audio/video using Android's document picker, with persisted access to user-selected files (no broad storage permission requested).
-- Custom NK PLAYER launcher icon and in-app brand mark, with adaptive icon support on Android 8.0+.
-- Android 13+ notification-permission request for notification-related features; playback can still be used if declined.
-- Search, import and remove media from the in-app library without deleting the original device file; persist the library locally with Preferences DataStore, including provider MIME types so document-picker video URIs are not classified by filename alone.
-- Player UI observes Media3 play/pause, playback-state and queue-transition events; selected track follows previous/next navigation and playback failures show a recoverable message.
-- Five saved accent themes: Neon Blue, Cyber Purple, Emerald Green, Crimson Red and Golden Amber.
-- Media3 playback queue: selecting an item queues the visible list and supports next/previous queue navigation.
-- Playback UI connects to a MediaSessionService, providing the foundation for background playback and system media controls.
-- Full-screen video player mode and Android Picture-in-Picture entry when a video is playing and the user leaves the app.
-- In-player selection of supported embedded subtitle tracks, with an option to turn subtitles off.
-- Load external `.srt` and `.vtt` subtitle files for the currently playing video through Android's document picker.
-- First playback-UI polish pass: now-playing status, previous/play-pause/next controls, seek bar and elapsed/total time labels.
-- Home-screen redesign pass: gradient media hero, clearer import action, library section/count, compact status cards and a first-run import tip.
-- Audio/video library UI pass: distinct gradient headers, file counts, descriptive labels and a quick import action on each tab.
-- Studio UI pass: premium header with active-theme status and selectable accent-theme preview cards.
-- Working audio effects (Studio tab): system Equalizer with presets and per-band sliders, Bass Boost and Virtualizer. Effects live in the playback service, attach to the player's audio session, and their settings persist across app restarts. Availability depends on the device's audio effect support.
-- Player controls: shuffle, repeat (off / all / one), playback speed (0.5x to 2x) and a sleep timer (15/30/45/60 min).
-- Tapping the playback notification opens the app; the service stops when the app is swiped away and nothing is playing.
-- GitHub Actions assembles a debug APK and uploads it as a downloadable workflow artifact.
+### Interface
+- Glassmorphism on every screen: animated gradient background, frosted translucent cards with hairline borders, floating glass navigation bar and mini player.
+- Brand fonts: Unbounded (headings) and Manrope (text). They are downloaded automatically by the `fetchFonts` Gradle task, so the first build needs internet access.
+- Full-screen Now Playing screen with cover art (embedded artwork or a video frame) as a blurred backdrop, seek bar, shuffle / repeat / speed / sleep timer, and subtitle controls for video.
+- Cover-art and video thumbnails in the library lists.
+- Five saved accent themes: Neon Blue, Cyber Purple, Emerald Green, Crimson Red and Golden Amber (each re-tints the whole gradient).
+
+### Player
+- Home, Audio, Video and Studio tabs.
+- Import local audio/video through Android's document picker with persisted access (no broad storage permission). The library is stored locally with Preferences DataStore, including provider MIME types.
+- Search, import and remove media without deleting the original device file.
+- Media3 playback queue with next/previous navigation; playback failures show a recoverable message.
+- MediaSessionService for background playback and system media controls; Android 13+ notification-permission request.
+- Full-screen video mode and Picture-in-Picture when a video is playing and the user leaves the app.
+- Embedded subtitle track selection, plus external `.srt` and `.vtt` files.
+- Studio tab: system Equalizer with presets and per-band sliders, Bass Boost and Virtualizer. Effects live in the playback service and their settings persist. Availability depends on the device.
+- Shuffle, repeat (off / all / one), playback speed (0.5x to 2x) and a sleep timer (15/30/45/60 min).
 
 ## Build and download
 
-The repository's **Actions** tab runs `gradle assembleDebug` for pushes to `main`. When the workflow succeeds, open the latest successful run and download the artifact named `nk-player-debug-apk`.
+The **Actions** tab runs `gradle assembleDebug` for pushes and pull requests to `main`, and can be started by hand with **Run workflow** on any branch. When it succeeds, open the run and download the artifact named `nk-player-debug-apk`.
 
 - [Latest build runs](https://github.com/hackritesh16/-NK-PLAYER-ANDROID/actions)
-- [Source code](https://github.com/hackritesh16/-NK-PLAYER-ANDROID)
 
-Local build requirements: JDK 17, Android SDK Platform 35 and Gradle 8.9.
+Local build requirements: JDK 17, Android SDK Platform 35, Gradle 8.9 and internet access (for the font download).
 
 ```bash
 gradle assembleDebug
 ```
 
-The output APK is normally generated at `app/build/outputs/apk/debug/app-debug.apk`.
-
-## UI/UX Pro Max skill
-
-The UI/UX Pro Max skill is installed under `.agents/skills/ui-ux-pro-max/` with searchable data, Python tools, references, and Jetpack Compose guidance. The NK PLAYER design system is documented in `design-system/nk-player/MASTER.md`.
+The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Still to implement or verify
 
-This is an active development build, not yet a production-ready release. The latest code must pass CI and still needs real-device testing. The following remain planned or incomplete:
-- Verify background playback, notification controls, audio focus and playback restoration on a real device (manifest declarations are present; device behavior still needs testing).
-- Verify full-screen video and Picture-in-Picture behavior on real devices, including orientation and system UI interactions.
-- Subtitle synchronization/offset controls and broader subtitle-format support.
-- Audio-effect initialization and vendor capability checks are guarded so unsupported Equalizer/Bass Boost/Virtualizer APIs do not take down the playback service; verify effect behaviour on real devices (some devices or routes ignore platform effects).
-- Robust metadata/MIME-type detection, format-specific error handling and accessibility polish.
-- Continue the broader UI redesign across Audio, Video and Studio tabs; verify responsive layout and accessibility polish.
-- Automated UI tests, release signing and release APK.
-
-The video/audio classification used for list filtering is currently a filename-extension heuristic; it does not guarantee that every file format is playable.
+This is an active development build, not a production release. The glass UI needs real-device testing.
+- Verify background playback, notification controls, audio focus and playback restoration on a real device.
+- Verify full-screen video and Picture-in-Picture, including orientation and system UI.
+- Real backdrop blur for glass surfaces (current glass is translucency plus gradient), and a glass restyle of the Equalizer card.
+- Video gestures (volume, brightness, seek), resume position, and subtitle sync/offset and more formats.
+- Wider format support: Media3 relies on the device's codecs, so some audio codecs and containers may not play. A LibVLC or FFmpeg-based engine is the path to "every format".
+- Robust MIME-type detection (video/audio filtering currently also falls back to a filename-extension heuristic), accessibility polish, automated UI tests, release signing and a release APK.
 
 ## Privacy
 

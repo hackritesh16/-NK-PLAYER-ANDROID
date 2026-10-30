@@ -1,3 +1,5 @@
+import java.net.URL
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -11,27 +13,50 @@ android {
         applicationId = "com.nkplayer.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.5.0-glass"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
-    buildTypes {
-        release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
-    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
 }
+
+// Brand fonts (Unbounded for headings, Manrope for text; both SIL OFL) are downloaded once
+// into res/font before every build, so no binary font files need to live in git.
+val fontDir = file("src/main/res/font")
+val fontFiles = mapOf(
+    "unbounded.ttf" to "https://raw.githubusercontent.com/google/fonts/main/ofl/unbounded/Unbounded%5Bwght%5D.ttf",
+    "manrope.ttf" to "https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/Manrope%5Bwght%5D.ttf"
+)
+val fetchFonts = tasks.register("fetchFonts") {
+    outputs.dir(fontDir)
+    doLast {
+        fontDir.mkdirs()
+        fontFiles.forEach { (name, url) ->
+            val target = File(fontDir, name)
+            if (!target.exists() || target.length() < 50_000L) {
+                var attempt = 0
+                while (true) {
+                    try {
+                        URL(url).openStream().use { input ->
+                            target.outputStream().use { out -> input.copyTo(out) }
+                        }
+                        break
+                    } catch (e: Exception) {
+                        attempt++
+                        if (attempt >= 3) throw GradleException("Could not download font ${name}: ${e.message}")
+                        Thread.sleep(1500)
+                    }
+                }
+            }
+        }
+    }
+}
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(fetchFonts) }
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
