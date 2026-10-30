@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +46,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.HazeMaterials
 import androidx.media3.common.Player
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -107,21 +112,32 @@ val NkPalettes = listOf(
 
 fun paletteFor(name: String): NkPalette = NkPalettes.firstOrNull { it.name == name } ?: NkPalettes.first()
 
+private val LocalNkHazeState = staticCompositionLocalOf<HazeState?> { null }
+
+@Composable
+fun Modifier.nkBackdropBlur(): Modifier {
+    val state = LocalNkHazeState.current ?: return this
+    return hazeEffect(state = state, style = HazeMaterials.ultraThin())
+}
+
 @Composable
 fun NkTheme(palette: NkPalette, content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = palette.accent,
-            onPrimary = Color(0xFF07101C),
-            secondary = palette.accent,
-            background = palette.bgBottom,
-            surface = Color(0xFF1A1245),
-            onSurface = Color.White,
-            onBackground = Color.White
-        ),
-        typography = NkTypography
-    ) {
-        CompositionLocalProvider(LocalContentColor provides Color.White) { content() }
+    val hazeState = remember { HazeState() }
+    CompositionLocalProvider(LocalNkHazeState provides hazeState) {
+        MaterialTheme(
+            colorScheme = darkColorScheme(
+                primary = palette.accent,
+                onPrimary = Color(0xFF07101C),
+                secondary = palette.accent,
+                background = palette.bgBottom,
+                surface = Color(0xFF1A1245),
+                onSurface = Color.White,
+                onBackground = Color.White
+            ),
+            typography = NkTypography
+        ) {
+            CompositionLocalProvider(LocalContentColor provides Color.White) { content() }
+        }
     }
 }
 
@@ -132,6 +148,8 @@ fun NkTheme(palette: NkPalette, content: @Composable () -> Unit) {
 /** Slowly drifting gradient with soft colour glows; this is what the glass layers sit on. */
 @Composable
 fun GlassBackground(p: NkPalette, content: @Composable BoxScope.() -> Unit) {
+    val hazeState = LocalNkHazeState.current
+    val sourceModifier = hazeState?.let { Modifier.hazeSource(it) } ?: Modifier
     val transition = rememberInfiniteTransition(label = "glow")
     val t by transition.animateFloat(
         initialValue = 0f,
@@ -142,6 +160,7 @@ fun GlassBackground(p: NkPalette, content: @Composable BoxScope.() -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
+            .then(sourceModifier)
             .background(Brush.verticalGradient(listOf(p.bgTop, p.bgMid, p.bgBottom)))
             .drawBehind {
                 val w = size.width
@@ -196,7 +215,7 @@ fun GlassCard(
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val base = modifier.glass(shape, strength).let { if (onClick != null) it.clickable(onClick = onClick) else it }
+    val base = modifier.nkBackdropBlur().glass(shape, strength).let { if (onClick != null) it.clickable(onClick = onClick) else it }
     Column(base, content = content)
 }
 
@@ -210,7 +229,7 @@ fun GlassIconButton(
     tint: Color = Color.White,
     filled: Color? = null
 ) {
-    val look = if (filled != null) Modifier.clip(CircleShape).background(filled) else Modifier.glass(CircleShape)
+    val look = if (filled != null) Modifier.clip(CircleShape).background(filled) else Modifier.nkBackdropBlur().glass(CircleShape)
     Box(
         modifier.size(size).then(look).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
