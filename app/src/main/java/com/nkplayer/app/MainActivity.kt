@@ -731,24 +731,12 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             )
         }
         if (fullScreenVideo && selected?.let { isVideo(it) } == true) {
-            Dialog(
-                onDismissRequest = { fullScreenVideo = false },
-                properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-            ) {
-                Box(Modifier.fillMaxSize().background(Color.Black)) {
-                    AndroidView(
-                        factory = { context -> PlayerView(context).apply { this.player = player; useController = true } },
-                        update = { it.player = player },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    IconButton(
-                        onClick = { fullScreenVideo = false },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Exit full screen", tint = Color.White)
-                    }
-                }
-            }
+            NKFullScreenVideo(
+                player = player,
+                title = selected?.name.orEmpty(),
+                accent = accent,
+                onClose = { fullScreenVideo = false }
+            )
         }
     }
 }
