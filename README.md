@@ -24,6 +24,8 @@ A native Android audio/video player built with Kotlin, Jetpack Compose, Material
 - Working audio effects (Studio tab): system Equalizer with presets and per-band sliders, Bass Boost and Virtualizer. Effects live in the playback service, attach to the player's audio session, and their settings persist across app restarts. Availability depends on the device's audio effect support.
 - Player controls: shuffle, repeat (off / all / one), playback speed (0.5x to 2x) and a sleep timer (15/30/45/60 min).
 - Tapping the playback notification opens the app; the service stops when the app is swiped away and nothing is playing.
+- Glassmorphism UI pass: aurora canvas, frosted glass cards/tiles/mini player (`Glass.kt`, `UiComponents.kt`) and edge-to-edge system bars.
+- Liquid-glass floating bottom navigation (`LiquidNavBar.kt`): press the bar and slide your finger and the glass droplet follows it, stretching and settling like liquid (leading/trailing edges are separate springs); release to switch tab. Icons near the droplet are magnified, haptic ticks fire as you cross tabs, and each tab exposes Tab/selected semantics for TalkBack. Real backdrop blur behind the bar needs Android 12+ (API 31); older devices use a denser tint instead. Set `ENABLE_BACKDROP_BLUR` in `Glass.kt` to `false` to turn the blur off.
 - GitHub Actions assembles a debug APK and uploads it as a downloadable workflow artifact.
 
 ## Build and download
@@ -53,7 +55,7 @@ This is an active development build, not yet a production-ready release. The lat
 - Subtitle synchronization/offset controls and broader subtitle-format support.
 - Audio-effect initialization and vendor capability checks are guarded so unsupported Equalizer/Bass Boost/Virtualizer APIs do not take down the playback service; verify effect behaviour on real devices (some devices or routes ignore platform effects).
 - Robust metadata/MIME-type detection, format-specific error handling and accessibility polish.
-- Continue the broader UI redesign across Audio, Video and Studio tabs; verify responsive layout and accessibility polish.
+- Verify the liquid-glass navigation bar (drag feel, backdrop blur, performance) and the glass UI on real devices, including small screens, large font scale and landscape.
 - Automated UI tests, release signing and release APK.
 
 The video/audio classification used for list filtering is currently a filename-extension heuristic; it does not guarantee that every file format is playable.

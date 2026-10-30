@@ -26,7 +26,6 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.MoreExecutors
 
-private val FxPanel = Color(0xFF131A2A)
 
 /** Custom session commands shared by the playback service and the UI. */
 object FxCommands {
@@ -254,12 +253,7 @@ internal fun EqualizerSection(player: Player, accent: Color) {
     val refresh = { requestFx(player) { fx = it; loaded = true } }
     LaunchedEffect(player) { refresh() }
 
-    Surface(
-        color = FxPanel,
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.dp, Color(0xFF263247)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    GlassCard(Modifier.fillMaxWidth(), cornerRadius = 20.dp, baseAlpha = 0.40f) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.EqualizerIcon, null, tint = accent, modifier = Modifier.size(28.dp))
@@ -273,7 +267,7 @@ internal fun EqualizerSection(player: Player, accent: Color) {
                             fx?.enabled == true -> "On. Applies to all audio and video playback."
                             else -> "Off. Turn on to shape the sound."
                         },
-                        color = Color.Gray, fontSize = 10.sp, lineHeight = 14.sp
+                        color = NkTextMuted, fontSize = 11.sp, lineHeight = 14.sp
                     )
                 }
                 val state = fx
@@ -293,7 +287,7 @@ internal fun EqualizerSection(player: Player, accent: Color) {
             if (state != null && state.available) {
                 if (state.presets.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
-                    Text("PRESETS", color = Color.LightGray, fontSize = 10.sp, letterSpacing = 1.sp)
+                    Text("PRESETS", color = Color.LightGray, fontSize = 11.sp, letterSpacing = 1.sp)
                     Spacer(Modifier.height(6.dp))
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         state.presets.forEachIndexed { index, name ->
@@ -307,6 +301,7 @@ internal fun EqualizerSection(player: Player, accent: Color) {
                                 },
                                 label = { Text(name, fontSize = 11.sp) },
                                 colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = Color.White.copy(alpha = 0.07f),
                                     selectedContainerColor = accent.copy(alpha = 0.2f),
                                     selectedLabelColor = accent,
                                     labelColor = Color.LightGray
@@ -321,7 +316,7 @@ internal fun EqualizerSection(player: Player, accent: Color) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             formatHz(state.freqsHz.getOrElse(band) { 0 }),
-                            color = Color.LightGray, fontSize = 10.sp, modifier = Modifier.width(56.dp)
+                            color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.width(56.dp)
                         )
                         Slider(
                             value = level.toFloat().coerceIn(state.minLevel.toFloat(), state.maxLevel.toFloat()),
@@ -333,13 +328,13 @@ internal fun EqualizerSection(player: Player, accent: Color) {
                             },
                             valueRange = state.minLevel.toFloat()..state.maxLevel.toFloat(),
                             colors = SliderDefaults.colors(
-                                thumbColor = accent, activeTrackColor = accent, inactiveTrackColor = Color(0xFF344055)
+                                thumbColor = accent, activeTrackColor = accent, inactiveTrackColor = Color.White.copy(alpha = 0.18f)
                             ),
                             modifier = Modifier.weight(1f)
                         )
                         Text(
                             "%+.1f dB".format(level / 100f),
-                            color = accent, fontSize = 10.sp, modifier = Modifier.width(54.dp)
+                            color = accent, fontSize = 11.sp, modifier = Modifier.width(54.dp)
                         )
                     }
                 }
@@ -374,16 +369,16 @@ internal fun EqualizerSection(player: Player, accent: Color) {
 @Composable
 private fun StrengthRow(label: String, value: Int, accent: Color, onChange: (Int) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = Color.LightGray, fontSize = 10.sp, modifier = Modifier.width(92.dp))
+        Text(label, color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.width(92.dp))
         Slider(
             value = value.toFloat().coerceIn(0f, 1000f),
             onValueChange = { onChange(it.toInt()) },
             valueRange = 0f..1000f,
             colors = SliderDefaults.colors(
-                thumbColor = accent, activeTrackColor = accent, inactiveTrackColor = Color(0xFF344055)
+                thumbColor = accent, activeTrackColor = accent, inactiveTrackColor = Color.White.copy(alpha = 0.18f)
             ),
             modifier = Modifier.weight(1f)
         )
-        Text("${value / 10}%", color = accent, fontSize = 10.sp, modifier = Modifier.width(38.dp))
+        Text("${value / 10}%", color = accent, fontSize = 11.sp, modifier = Modifier.width(38.dp))
     }
 }

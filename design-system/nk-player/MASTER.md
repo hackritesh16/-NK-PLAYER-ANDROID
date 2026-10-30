@@ -13,6 +13,13 @@ Dark-first cinematic media utility with restrained neon accents.
 - Primary text: #FFFFFF; secondary text: #CBD5E1; borders: #29344A
 - Use gradients only for hero/header surfaces. Cards stay calm and consistent.
 
+## Glass language
+Glass surfaces sit on an aurora canvas (soft accent orbs) so there is something to refract.
+- Card: dark tint (#0B1424 at 38-58%) + white sheen (12% to 3%) + 1dp gradient rim (white to accent). Selected state raises rim and accent glow, never colour alone.
+- Floating bottom navigation is liquid glass: pill shape, backdrop blur on Android 12+, a droplet indicator that follows touch and stretches with motion. Unselected icons #B9C6D8, selected use the accent.
+- Keep text on glass at WCAG AA or better; secondary text uses #9DAEC5 or lighter. Blur and tint are decoration, never the only carrier of meaning.
+- Every tab keeps a 48dp+ target, Tab role and selected state in semantics.
+
 ## Compose tokens
 | Token | Value | Purpose |
 |---|---|---|
