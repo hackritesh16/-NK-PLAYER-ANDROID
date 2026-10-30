@@ -24,7 +24,7 @@ A native Android audio/video player built with Kotlin, Jetpack Compose, Material
 
 ## Build and download
 
-The **Actions** tab runs `gradle assembleDebug` for pushes and pull requests to `main`, and can be started by hand with **Run workflow** on any branch. When it succeeds, open the run and download the artifact named `nk-player-debug-apk`.
+The **Actions** workflow runs `gradle assembleDebug` for pushes to `main` and pull requests targeting `main` or `build58-liquid-nav`; it can also be started by hand with **Run workflow** on any branch. When it succeeds, open the run and download the artifact named `nk-player-debug-apk`.
 
 - [Latest build runs](https://github.com/hackritesh16/-NK-PLAYER-ANDROID/actions)
 
@@ -41,7 +41,7 @@ The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
 This is an active development build, not a production release. The glass UI needs real-device testing.
 - Verify background playback, notification controls, audio focus and playback restoration on a real device.
 - Verify full-screen video and Picture-in-Picture, including orientation and system UI.
-- Validate backdrop-blur quality and performance on real Android 12 (API 31) and newer devices. API 31 blur is explicitly enabled despite Haze's conservative default, so test for rendering/invalidation issues. Complete the glass restyle of the Equalizer card.
+- Validate backdrop-blur quality and performance on real Android 12 (API 31) and newer devices. API 31 blur is explicitly enabled despite Haze's conservative default, so test for rendering/invalidation issues. The Equalizer panel now uses the shared frosted-glass surface.
 - Video gestures (volume, brightness, seek), resume position, and subtitle sync/offset and more formats.
 - Wider format support: Media3 relies on the device's codecs, so some audio codecs and containers may not play. A LibVLC or FFmpeg-based engine is the path to "every format".
 - Robust MIME-type detection (video/audio filtering currently also falls back to a filename-extension heuristic), accessibility polish, automated UI tests, release signing and a release APK.
