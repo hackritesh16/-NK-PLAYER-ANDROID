@@ -18,12 +18,14 @@ import com.google.common.util.concurrent.ListenableFuture
 /**
  * Owns the playback engine so playback can continue when the Activity is not visible.
  * The app connects to this service through a MediaController. The service also owns the
- * audio effects (equalizer, bass boost, virtualizer) and exposes them as custom session commands.
+ * audio effects (equalizer, bass boost, virtualizer) and the sleep timer, and exposes them
+ * as custom session commands.
  */
 @UnstableApi
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var fx: AudioFxController? = null
+    private var sleepTimer: SleepTimerController? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -45,6 +47,8 @@ class PlaybackService : MediaSessionService() {
 
             val effects = AudioFxController(this)
             fx = effects
+            val sleep = SleepTimerController { mediaSession?.player?.pause() }
+            sleepTimer = sleep
             player.addListener(object : Player.Listener {
                 override fun onAudioSessionIdChanged(audioSessionId: Int) {
                     runCatching { effects.attach(audioSessionId) }
@@ -59,7 +63,7 @@ class PlaybackService : MediaSessionService() {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
             mediaSession = MediaSession.Builder(this, player)
-                .setCallback(FxCallback(effects))
+                .setCallback(FxCallback(effects, sleep))
                 .setSessionActivity(openApp)
                 .build()
         } catch (error: Exception) {
@@ -71,6 +75,8 @@ class PlaybackService : MediaSessionService() {
             runCatching { createdPlayer?.release() }
             runCatching { fx?.release() }
             fx = null
+            sleepTimer?.cancel()
+            sleepTimer = null
             stopSelf()
         }
     }
@@ -85,6 +91,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        sleepTimer?.cancel()
+        sleepTimer = null
         fx?.release()
         fx = null
         mediaSession?.run {
@@ -95,13 +103,19 @@ class PlaybackService : MediaSessionService() {
         super.onDestroy()
     }
 
-    private class FxCallback(private val effects: AudioFxController) : MediaSession.Callback {
+    private class FxCallback(
+        private val effects: AudioFxController,
+        private val sleep: SleepTimerController
+    ) : MediaSession.Callback {
         override fun onConnect(
             session: MediaSession,
             controller: MediaSession.ControllerInfo
         ): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-                .apply { FxCommands.all.forEach { add(it) } }
+                .apply {
+                    FxCommands.all.forEach { add(it) }
+                    SleepCommands.all.forEach { add(it) }
+                }
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -114,6 +128,14 @@ class PlaybackService : MediaSessionService() {
             customCommand: SessionCommand,
             args: Bundle
         ): ListenableFuture<SessionResult> {
+            when (customCommand.customAction) {
+                SleepCommands.SET -> {
+                    sleep.set(args.getInt("minutes"))
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, sleep.state()))
+                }
+                SleepCommands.GET ->
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, sleep.state()))
+            }
             when (customCommand.customAction) {
                 FxCommands.ENABLE -> effects.setEnabled(args.getBoolean("enabled"))
                 FxCommands.BAND -> effects.setBand(args.getInt("band"), args.getInt("level"))
