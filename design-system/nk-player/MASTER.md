@@ -57,3 +57,34 @@ Theme accents must not change success, warning, error, or disabled semantics.
 - No clipped controls on small screens or large font scale.
 - Background playback, notification actions, audio focus, PiP and subtitles are tested on real devices.
 - Release signing is separate from the debug CI artifact.
+
+## Reusable Compose implementation
+
+Implementation lives in `app/src/main/java/com/nkplayer/app/NKDesignSystem.kt`.
+- `NKDesignTokens`: semantic palette, spacing, corner radii and motion durations.
+- `NKGlassCard`: reusable translucent surface with a hairline border and restrained elevation.
+- `NKAuroraBackdrop`: lightweight gradient backdrop for hero and header surfaces.
+
+## Reference adaptation policy
+
+The four reviewed references are React/web libraries. Their source components are not Android-compatible and are not installed in this project. Their visual principles are adapted to native Compose:
+- Liquid glass: translucent layered surfaces, edge highlights and background-aware contrast; no always-on WebGL refraction or expensive runtime blur.
+- Glass UI: semantic theme roles and reusable controls rather than one-off hardcoded styles.
+- Liquefy: motion should feel spring-like and tactile, but remain subtle and respect reduced-motion/accessibility needs.
+- Viberdy: aurora gradients and spatial depth are reserved for hero/featured surfaces, not every list row.
+
+## Screen rollout
+
+1. Home: aurora hero, shared glass statistics and consistent spacing.
+2. Audio and Video libraries: shared header, search treatment, selected media-row state and calm surfaces.
+3. Studio: shared theme cards and reusable glass panels around sound settings.
+4. Playback shell: shared glass mini-player and navigation surface.
+5. Fullscreen video: keep video canvas clear; controls should be high contrast and gesture-first, with no decorative glass over the viewing area unless controls are visible.
+
+## Performance and accessibility guardrails
+
+- No new runtime dependencies for the visual system.
+- Avoid full-screen blur, WebGL refraction, continuous background animation and large shadow stacks.
+- Keep 48dp minimum interactive targets and semantic content descriptions.
+- Use motion for state changes and touch feedback, not decoration that runs indefinitely.
+- Preserve all existing Media3 playback, queue, subtitle, PiP, audio-effect and local-library behavior.
