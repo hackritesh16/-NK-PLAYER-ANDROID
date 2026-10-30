@@ -24,6 +24,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,6 +55,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -66,11 +70,19 @@ import androidx.media3.ui.PlayerView
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val InkButton = Color(0xFF07101C)
 private val DialogGlass = Color(0xFF1A1245)
 
-private data class Track(val uri: String, val name: String, val mimeType: String? = null) {
+/** [video] is set for files found on the device; [device] items are re-scanned, never saved. */
+private data class Track(
+    val uri: String,
+    val name: String,
+    val mimeType: String? = null,
+    val video: Boolean? = null,
+    val device: Boolean = false
+) {
     fun saved() = SavedTrack(uri, name, mimeType)
 }
 
@@ -179,6 +191,7 @@ private fun StartupScreen(error: String?) {
 @Composable
 private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission: (Uri) -> Unit) {
     var tracks by remember { mutableStateOf(emptyList<Track>()) }
+    var deviceTracks by remember { mutableStateOf(emptyList<Track>()) }
     var selected by remember { mutableStateOf<Track?>(null) }
     var tab by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
@@ -190,13 +203,32 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     var externalSubtitleName by remember { mutableStateOf<String?>(null) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val snap = rememberPlaybackSnapshot(player)
 
-    DisposableEffect(player, tracks) {
+    // Manually imported files (persisted) plus everything found on the device (re-scanned each time).
+    val libraryTracks = remember(tracks, deviceTracks) { (tracks + deviceTracks).distinctBy { it.uri } }
+    var mediaAccess by remember { mutableStateOf(DeviceMedia.hasPermission(context)) }
+    var mediaDenied by remember { mutableStateOf(false) }
+    var scanning by remember { mutableStateOf(false) }
+
+    val rescan: () -> Unit = {
+        mediaAccess = DeviceMedia.hasPermission(context)
+        if (mediaAccess && !scanning) {
+            scanning = true
+            scope.launch {
+                val found = runCatching { DeviceMedia.scan(context) }.getOrDefault(emptyList())
+                deviceTracks = found.map { Track(it.uri, it.name, it.mimeType, it.video, true) }
+                scanning = false
+            }
+        }
+    }
+
+    DisposableEffect(player, libraryTracks) {
         val listener = object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val currentUri = mediaItem?.localConfiguration?.uri?.toString()
-                selected = tracks.firstOrNull { it.uri == currentUri }
+                selected = libraryTracks.firstOrNull { it.uri == currentUri }
                 playbackError = null
             }
             override fun onPlayerError(error: PlaybackException) {
@@ -242,16 +274,43 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             nowPlayingOpen = false
         }
     }
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* Playback remains usable if notifications are declined. */ }
 
+    // One request covers media access and (Android 13+) notifications; the system shows them in turn.
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        mediaAccess = DeviceMedia.hasPermission(context)
+        if (mediaAccess) rescan() else mediaDenied = true
+    }
     LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        val wanted = DeviceMedia.requiredPermissions().toMutableList()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) wanted += Manifest.permission.POST_NOTIFICATIONS
+        val missing = wanted.filter { context.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isNotEmpty()) permissionLauncher.launch(missing.toTypedArray())
+    }
+    val requestAccess: () -> Unit = {
+        if (mediaDenied) {
+            context.startActivity(
+                android.content.Intent(
+                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", context.packageName, null)
+                )
+            )
+        } else {
+            permissionLauncher.launch(DeviceMedia.requiredPermissions())
         }
+    }
+
+    // Scan when the app opens and whenever the user returns to it (new files, permission granted in Settings).
+    val lifecycleOwner = context as? ComponentActivity
+    DisposableEffect(lifecycleOwner) {
+        val observer = object : LifecycleEventObserver {
+            override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+                if (event == Lifecycle.Event.ON_RESUME) rescan()
+            }
+        }
+        lifecycleOwner?.lifecycle?.addObserver(observer)
+        onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
     }
 
     LaunchedEffect(store) {
@@ -312,7 +371,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     }
 
     val importAll = { picker.launch(arrayOf("audio/*", "video/*")) }
-    val visibleTracks = tracks.filter { it.name.contains(query, true) }
+    val visibleTracks = libraryTracks.filter { it.name.contains(query, true) }
     val pick: (Track, List<Track>) -> Unit = { track, queue ->
         playbackError = null
         playTrack(track, queue, player)
@@ -341,22 +400,27 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 contentPadding = PaddingValues(bottom = 8.dp)
                             ) {
                                 item { HomeHero(accent, importAll) }
+                                if (!mediaAccess) item { PermissionCard(accent, mediaDenied, requestAccess) }
                                 item {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        StatCard("FILES", tracks.size.toString(), Modifier.weight(1f), accent)
-                                        StatCard("AUDIO", tracks.count { !isVideo(it) }.toString(), Modifier.weight(1f), accent)
-                                        StatCard("VIDEO", tracks.count { isVideo(it) }.toString(), Modifier.weight(1f), accent)
+                                        StatCard("FILES", libraryTracks.size.toString(), Modifier.weight(1f), accent)
+                                        StatCard("AUDIO", libraryTracks.count { !isVideo(it) }.toString(), Modifier.weight(1f), accent)
+                                        StatCard("VIDEO", libraryTracks.count { isVideo(it) }.toString(), Modifier.weight(1f), accent)
                                     }
                                 }
                                 item {
                                     SectionHeader(
                                         "YOUR LIBRARY",
-                                        if (tracks.isEmpty()) "Start by importing your favourite files" else "${tracks.size} item(s) ready to play",
-                                        accent, importAll
+                                        when {
+                                            scanning -> "Scanning your device…"
+                                            libraryTracks.isEmpty() -> "Allow access or import files to begin"
+                                            else -> "${libraryTracks.size} item(s) ready to play"
+                                        },
+                                        accent, importAll, rescan
                                     )
                                 }
                                 item { SearchBox(query, { query = it }, accent) }
-                                if (visibleTracks.isEmpty()) item { EmptyState(accent) }
+                                if (visibleTracks.isEmpty() && !scanning) item { EmptyState(accent) }
                                 items(visibleTracks, key = { it.uri }) { track ->
                                     TrackRow(track, track == selected, snap.isPlaying, accent,
                                         onPick = { pick(track, visibleTracks) }, onRemove = { removeTrack(track) })
@@ -364,7 +428,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                             }
                             1, 2 -> {
                                 val videoTab = tab == 2
-                                val filtered = tracks.filter { isVideo(it) == videoTab && it.name.contains(query, true) }
+                                val filtered = libraryTracks.filter { isVideo(it) == videoTab && it.name.contains(query, true) }
                                 LazyColumn(
                                     Modifier.fillMaxSize(),
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -373,15 +437,18 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                     item {
                                         LibraryHeader(
                                             title = if (videoTab) "VIDEO LIBRARY" else "AUDIO LIBRARY",
-                                            subtitle = if (videoTab) "Your clips, films and saved videos" else "Your music, podcasts and audio files",
+                                            subtitle = if (scanning) "Scanning your device…"
+                                            else if (videoTab) "Your clips, films and saved videos" else "Your music, podcasts and audio files",
                                             count = filtered.size,
                                             video = videoTab,
                                             accent = accent,
-                                            onImport = { picker.launch(arrayOf(if (videoTab) "video/*" else "audio/*")) }
+                                            onImport = { picker.launch(arrayOf(if (videoTab) "video/*" else "audio/*")) },
+                                            onRefresh = rescan
                                         )
                                     }
+                                    if (!mediaAccess) item { PermissionCard(accent, mediaDenied, requestAccess) }
                                     item { SearchBox(query, { query = it }, accent) }
-                                    if (filtered.isEmpty()) item { EmptyState(accent) }
+                                    if (filtered.isEmpty() && !scanning) item { EmptyState(accent) }
                                     items(filtered, key = { it.uri }) { track ->
                                         TrackRow(track, track == selected, snap.isPlaying, accent,
                                             onPick = { pick(track, filtered) }, onRemove = { removeTrack(track) })
@@ -531,7 +598,11 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
 }
 
 private fun playTrack(track: Track, queue: List<Track>, player: Player) {
-    val playableQueue = queue.ifEmpty { listOf(track) }
+    val full = queue.ifEmpty { listOf(track) }
+    val fullIndex = full.indexOfFirst { it.uri == track.uri }.coerceAtLeast(0)
+    // With the whole device library listed, queue a window around the chosen item instead of thousands.
+    val from = if (full.size > 500) (fullIndex - 100).coerceAtLeast(0) else 0
+    val playableQueue = full.subList(from, minOf(full.size, from + 500))
     val startIndex = playableQueue.indexOfFirst { it.uri == track.uri }.coerceAtLeast(0)
     val mediaItems = playableQueue.map { item ->
         MediaItem.Builder().setUri(item.uri).apply {
@@ -614,10 +685,42 @@ private fun HomeHero(accent: Color, onImport: () -> Unit) {
             Text("Press play.\nFeel the difference.", fontFamily = DisplayFont, fontWeight = FontWeight.ExtraBold,
                 fontSize = 26.sp, lineHeight = 32.sp)
             Spacer(Modifier.height(8.dp))
-            Text("Audio and video in one glass-smooth player. Import files and start playing.",
+            Text("Audio and video in one glass-smooth player. Your phone's music and videos appear here automatically.",
                 color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, lineHeight = 19.sp)
             Spacer(Modifier.height(18.dp))
-            AccentButton("IMPORT FROM DEVICE", Icons.Default.Add, accent, Modifier.fillMaxWidth(), onImport)
+            AccentButton("ADD FILES MANUALLY", Icons.Default.Add, accent, Modifier.fillMaxWidth(), onImport)
+        }
+    }
+}
+
+@Composable
+private fun PermissionCard(accent: Color, denied: Boolean, onAllow: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), strength = 1.3f) {
+        Column(Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(accent.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.FolderOpen, null, tint = accent, modifier = Modifier.size(26.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Find my music & videos", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text("No manual import needed", color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                if (denied) "Access was denied. Open Settings, allow Music and audio / Photos and videos, then come back."
+                else "Allow access to audio and video on this phone and NK PLAYER lists everything automatically. Nothing is uploaded.",
+                color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, lineHeight = 18.sp
+            )
+            Spacer(Modifier.height(14.dp))
+            AccentButton(
+                if (denied) "OPEN SETTINGS" else "ALLOW & SCAN DEVICE",
+                Icons.Default.Search, accent, Modifier.fillMaxWidth(), onAllow
+            )
         }
     }
 }
@@ -636,12 +739,14 @@ private fun StatCard(label: String, value: String, modifier: Modifier, accent: C
 }
 
 @Composable
-private fun SectionHeader(title: String, subtitle: String, accent: Color, onAdd: () -> Unit) {
+private fun SectionHeader(title: String, subtitle: String, accent: Color, onAdd: () -> Unit, onRefresh: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, letterSpacing = 0.8.sp)
             Text(subtitle, color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
         }
+        GlassIconButton(Icons.Default.Refresh, "Rescan device", onRefresh, tint = accent)
+        Spacer(Modifier.width(8.dp))
         GlassIconButton(Icons.Default.Add, "Import media", onAdd, tint = accent)
     }
 }
@@ -653,7 +758,8 @@ private fun LibraryHeader(
     count: Int,
     video: Boolean,
     accent: Color,
-    onImport: () -> Unit
+    onImport: () -> Unit,
+    onRefresh: () -> Unit
 ) {
     GlassCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), strength = 1.2f) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -672,6 +778,8 @@ private fun LibraryHeader(
                 Spacer(Modifier.height(6.dp))
                 Text("$count FILE(S)", color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             }
+            GlassIconButton(Icons.Default.Refresh, "Rescan device", onRefresh, tint = accent)
+            Spacer(Modifier.width(8.dp))
             GlassIconButton(Icons.Default.Add, "Import files", onImport, tint = accent)
         }
     }
@@ -684,7 +792,7 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, accent: Color) {
         onValueChange = onValue,
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        placeholder = { Text("Search imported media…", color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp) },
+        placeholder = { Text("Search your media…", color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp) },
         leadingIcon = { Icon(Icons.Default.Search, null, tint = accent) },
         shape = RoundedCornerShape(18.dp),
         colors = OutlinedTextFieldDefaults.colors(
@@ -708,9 +816,9 @@ private fun EmptyState(accent: Color) {
         ) {
             Icon(Icons.Default.LibraryMusic, null, tint = accent, modifier = Modifier.size(34.dp))
             Spacer(Modifier.height(10.dp))
-            Text("No media here yet", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text("No media found", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             Spacer(Modifier.height(4.dp))
-            Text("Import files to build your library. They stay on this device.",
+            Text("Allow access to scan your phone, or add files manually. Everything stays on this device.",
                 color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, textAlign = TextAlign.Center)
         }
     }
@@ -749,9 +857,14 @@ private fun TrackRow(
                     }
                 }
             }
-            IconButton(onClick = onRemove) {
-                Icon(Icons.Default.DeleteOutline, contentDescription = "Remove ${track.name} from library",
-                    tint = Color(0xFFFF8A9A))
+            // Device files are managed by the system scan; only manually added files can be removed here.
+            if (!track.device) {
+                IconButton(onClick = onRemove) {
+                    Icon(Icons.Default.DeleteOutline, contentDescription = "Remove ${track.name} from library",
+                        tint = Color(0xFFFF8A9A))
+                }
+            } else {
+                Spacer(Modifier.width(8.dp))
             }
         }
     }
@@ -1017,7 +1130,7 @@ private fun formatTime(milliseconds: Long): String {
 }
 
 private fun isVideo(track: Track): Boolean =
-    track.mimeType?.startsWith("video/") == true || isVideo(track.uri)
+    track.video ?: (track.mimeType?.startsWith("video/") == true || isVideo(track.uri))
 
 private fun isVideo(uri: String): Boolean {
     val path = Uri.parse(uri).lastPathSegment.orEmpty().lowercase()
