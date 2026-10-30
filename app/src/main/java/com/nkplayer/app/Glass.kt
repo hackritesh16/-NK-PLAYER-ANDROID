@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.HazeMaterials
@@ -113,17 +114,36 @@ val NkPalettes = listOf(
 fun paletteFor(name: String): NkPalette = NkPalettes.firstOrNull { it.name == name } ?: NkPalettes.first()
 
 private val LocalNkHazeState = staticCompositionLocalOf<HazeState?> { null }
+private val LocalNkNavHazeState = staticCompositionLocalOf<HazeState?> { null }
 
+@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun Modifier.nkBackdropBlur(): Modifier {
     val state = LocalNkHazeState.current ?: return this
     return hazeEffect(state = state, style = HazeMaterials.ultraThin())
 }
 
+@OptIn(ExperimentalHazeMaterialsApi::class)
+@Composable
+fun Modifier.nkNavBackdropBlur(): Modifier {
+    val state = LocalNkNavHazeState.current ?: return this
+    return hazeEffect(state = state, style = HazeMaterials.ultraThin())
+}
+
+@Composable
+fun Modifier.nkNavHazeSource(): Modifier {
+    val state = LocalNkNavHazeState.current ?: return this
+    return hazeSource(state)
+}
+
 @Composable
 fun NkTheme(palette: NkPalette, content: @Composable () -> Unit) {
     val hazeState = remember { HazeState() }
-    CompositionLocalProvider(LocalNkHazeState provides hazeState) {
+    val navHazeState = remember { HazeState() }
+    CompositionLocalProvider(
+        LocalNkHazeState provides hazeState,
+        LocalNkNavHazeState provides navHazeState
+    ) {
         MaterialTheme(
             colorScheme = darkColorScheme(
                 primary = palette.accent,
@@ -157,12 +177,13 @@ fun GlassBackground(p: NkPalette, content: @Composable BoxScope.() -> Unit) {
         animationSpec = infiniteRepeatable(tween(16000, easing = LinearEasing), RepeatMode.Reverse),
         label = "glowShift"
     )
-    Box(
-        Modifier
-            .fillMaxSize()
-            .then(sourceModifier)
-            .background(Brush.verticalGradient(listOf(p.bgTop, p.bgMid, p.bgBottom)))
-            .drawBehind {
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .then(sourceModifier)
+                .background(Brush.verticalGradient(listOf(p.bgTop, p.bgMid, p.bgBottom)))
+                .drawBehind {
                 val w = size.width
                 val h = size.height
                 val c1 = Offset(w * (0.95f - 0.25f * t), h * (0.06f + 0.06f * t))
@@ -183,9 +204,10 @@ fun GlassBackground(p: NkPalette, content: @Composable BoxScope.() -> Unit) {
                     radius = w * 0.7f,
                     center = c3
                 )
-            },
-        content = content
-    )
+            }
+        )
+        content()
+    }
 }
 
 /** Frosted-glass surface: translucent white gradient, bright hairline border on the top-left edge. */
