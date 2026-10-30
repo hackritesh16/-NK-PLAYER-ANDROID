@@ -5,7 +5,7 @@ A native Android audio/video player built with Kotlin, Jetpack Compose, Material
 ## Current development milestone: v0.5.0 (glass UI)
 
 ### Interface
-- Glassmorphism on every screen: animated gradient background, real source-backed backdrop blur on Android 12+, frosted translucent cards with hairline borders, floating glass navigation bar and mini player. Older Android versions retain the translucent glass fallback.
+- Glassmorphism on every screen: animated gradient background, real source-backed backdrop blur on Android 12L+ (API 32+), frosted translucent cards with hairline borders, floating glass navigation bar and mini player. Android 12 (API 31) and older versions retain the translucent glass fallback.
 - Brand fonts: Unbounded (headings) and Manrope (text). They are downloaded automatically by the `fetchFonts` Gradle task, so the first build needs internet access.
 - Full-screen Now Playing screen with cover art (embedded artwork or a video frame) as a blurred backdrop, seek bar, shuffle / repeat / speed / sleep timer, and subtitle controls for video.
 - Cover-art and video thumbnails in the library lists.
@@ -41,7 +41,7 @@ The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
 This is an active development build, not a production release. The glass UI needs real-device testing.
 - Verify background playback, notification controls, audio focus and playback restoration on a real device.
 - Verify full-screen video and Picture-in-Picture, including orientation and system UI.
-- Validate backdrop-blur quality and performance on real Android 12+ devices; older Android versions use the translucent fallback. Complete the glass restyle of the Equalizer card.
+- Validate backdrop-blur quality and performance on real Android 12L+ (API 32+) devices; Android 12 (API 31) and older versions use the translucent fallback. Complete the glass restyle of the Equalizer card.
 - Video gestures (volume, brightness, seek), resume position, and subtitle sync/offset and more formats.
 - Wider format support: Media3 relies on the device's codecs, so some audio codecs and containers may not play. A LibVLC or FFmpeg-based engine is the path to "every format".
 - Robust MIME-type detection (video/audio filtering currently also falls back to a filename-extension heuristic), accessibility polish, automated UI tests, release signing and a release APK.
