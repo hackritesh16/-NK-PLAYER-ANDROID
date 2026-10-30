@@ -829,7 +829,12 @@ private fun LibraryTabHeader(
     accent: Color,
     onImport: () -> Unit
 ) {
-    Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+    NKGlassCard(
+        tint = Panel,
+        shape = RoundedCornerShape(NKDesignTokens.Radius.large),
+        elevation = 8.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
         Row(
             Modifier.background(Brush.horizontalGradient(listOf(Color(0xFF17283B), Color(0xFF17172B))))
                 .padding(16.dp),
@@ -992,12 +997,11 @@ private fun MediaList(
         ) {
             items(items, key = { it.uri }) { track ->
                 val active = track == selected
-                Surface(
-                    color = if (active) Color(0xD91B3546) else Color(0xA8172131),
-                    shape = RoundedCornerShape(19.dp),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp, if (active) accent.copy(alpha = 0.58f) else GlassStroke
-                    ),
+                NKGlassCard(
+                    tint = if (active) Color(0xD91B3546) else Color(0xA8172131),
+                    shape = RoundedCornerShape(NKDesignTokens.Radius.medium),
+                    stroke = if (active) accent.copy(alpha = 0.58f) else GlassStroke,
+                    elevation = if (active) 8.dp else 2.dp,
                     modifier = Modifier.fillMaxWidth().clickable { onPick(track) }
                 ) {
                     Row(
