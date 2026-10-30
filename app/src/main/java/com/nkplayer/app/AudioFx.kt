@@ -5,7 +5,6 @@ import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
 import android.media.audiofx.Virtualizer
 import android.os.Bundle
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -25,8 +24,6 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.MoreExecutors
-
-private val FxPanel = Color(0xFF131A2A)
 
 /** Custom session commands shared by the playback service and the UI. */
 object FxCommands {
@@ -254,11 +251,10 @@ internal fun EqualizerSection(player: Player, accent: Color) {
     val refresh = { requestFx(player) { fx = it; loaded = true } }
     LaunchedEffect(player) { refresh() }
 
-    Surface(
-        color = FxPanel,
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.dp, Color(0xFF263247)),
-        modifier = Modifier.fillMaxWidth()
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        strength = 1.15f
     ) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
