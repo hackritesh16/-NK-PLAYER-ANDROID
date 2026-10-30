@@ -207,6 +207,16 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     var themeName by remember { mutableStateOf("Neon Blue") }
     var libraryLoaded by remember { mutableStateOf(false) }
     var fullScreenVideo by remember { mutableStateOf(false) }
+    var subtitleDialog by remember { mutableStateOf(false) }
+    var externalSubtitleName by remember { mutableStateOf<String?>(null) }
+    var playbackPosition by remember { mutableLongStateOf(0L) }
+    var playbackDuration by remember { mutableLongStateOf(0L) }
+    var isSeeking by remember { mutableStateOf(false) }
+    var playbackUiRevision by remember(player) { mutableIntStateOf(0) }
+    var playbackError by remember { mutableStateOf<String?>(null) }
+    var seekPreview by remember { mutableFloatStateOf(0f) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val activity = context as? ComponentActivity
     val previousRequestedOrientation = remember(activity) { activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     LaunchedEffect(fullScreenVideo, playbackUiRevision) {
@@ -222,16 +232,6 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             host.requestedOrientation = previousRequestedOrientation
         }
     }
-    var subtitleDialog by remember { mutableStateOf(false) }
-    var externalSubtitleName by remember { mutableStateOf<String?>(null) }
-    var playbackPosition by remember { mutableLongStateOf(0L) }
-    var playbackDuration by remember { mutableLongStateOf(0L) }
-    var isSeeking by remember { mutableStateOf(false) }
-    var playbackUiRevision by remember(player) { mutableIntStateOf(0) }
-    var playbackError by remember { mutableStateOf<String?>(null) }
-    var seekPreview by remember { mutableFloatStateOf(0f) }
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     DisposableEffect(player, tracks) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { playbackUiRevision++ }
