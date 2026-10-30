@@ -594,16 +594,16 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             ) {
                 Box(Modifier.fillMaxSize().background(Color.Black)) {
                     AndroidView(
-                        factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = true } },
+                        factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = false; setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING) } },
                         update = { it.player = player },
                         modifier = Modifier.fillMaxSize()
                     )
-                    IconButton(
-                        onClick = { fullScreenVideo = false },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Exit full screen", tint = Color.White)
-                    }
+                    GlassVideoControls(
+                        player = player,
+                        accent = accent,
+                        modifier = Modifier.fillMaxSize(),
+                        onExit = { fullScreenVideo = false }
+                    )
                 }
             }
         }
@@ -901,6 +901,103 @@ private fun MiniPlayer(
 }
 
 @Composable
+private fun GlassVideoControls(
+    player: Player,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    onExit: (() -> Unit)? = null
+) {
+    var controlsVisible by remember { mutableStateOf(true) }
+    var locked by remember { mutableStateOf(false) }
+    var position by remember { mutableLongStateOf(0L) }
+    var duration by remember { mutableLongStateOf(0L) }
+    var dragging by remember { mutableStateOf(false) }
+    var seekPreview by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(player) {
+        while (true) {
+            position = player.currentPosition.coerceAtLeast(0L)
+            duration = player.duration.takeIf { it > 0L } ?: 0L
+            delay(350)
+        }
+    }
+    LaunchedEffect(controlsVisible, locked) {
+        if (controlsVisible && !locked) {
+            delay(3_500)
+            controlsVisible = false
+        }
+    }
+
+    Box(modifier) {
+        // A tap on the video toggles the overlay; it never covers the actual controls.
+        Box(Modifier.fillMaxSize().clickable {
+            if (!locked) controlsVisible = !controlsVisible
+        })
+        if (locked) {
+            GlassIconButton(
+                Icons.Default.Lock,
+                "Unlock video controls",
+                { locked = false; controlsVisible = true },
+                modifier = Modifier.align(Alignment.CenterEnd).padding(14.dp),
+                size = 48.dp
+            )
+        } else if (controlsVisible) {
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    GlassIconButton(Icons.Default.ArrowBack, "Back", { onExit?.invoke() ?: run { controlsVisible = false } }, size = 42.dp)
+                    Spacer(Modifier.weight(1f))
+                    GlassIconButton(Icons.Default.LockOpen, "Lock controls", { locked = true; controlsVisible = false }, size = 42.dp)
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    GlassIconButton(Icons.Default.Replay10, "Back 10 seconds", {
+                        player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L))
+                    }, size = 48.dp)
+                    Spacer(Modifier.width(24.dp))
+                    GlassIconButton(
+                        if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        if (player.isPlaying) "Pause video" else "Play video",
+                        { if (player.isPlaying) player.pause() else player.play() },
+                        size = 66.dp, tint = InkButton, filled = accent
+                    )
+                    Spacer(Modifier.width(24.dp))
+                    GlassIconButton(Icons.Default.Forward10, "Forward 10 seconds", {
+                        val end = player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                        player.seekTo((player.currentPosition + 10_000L).coerceAtMost(end))
+                    }, size = 48.dp)
+                }
+                Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp), 0.82f).padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Slider(
+                        value = if (dragging) seekPreview else if (duration > 0L) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
+                        onValueChange = { dragging = true; seekPreview = it },
+                        onValueChangeFinished = {
+                            if (duration > 0L) player.seekTo((seekPreview * duration).toLong())
+                            dragging = false
+                        },
+                        enabled = duration > 0L,
+                        colors = SliderDefaults.colors(
+                            thumbColor = accent,
+                            activeTrackColor = accent,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.28f)
+                        )
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(formatTime(if (dragging) (seekPreview * duration).toLong() else position), color = Color.White, fontSize = 11.sp)
+                        Text(formatTime(duration), color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun NowPlayingScreen(
     player: Player,
     track: Track,
@@ -952,11 +1049,14 @@ private fun NowPlayingScreen(
                         .clip(RoundedCornerShape(20.dp)).background(Color.Black)
                 ) {
                     if (showInlineVideo) {
-                        AndroidView(
-                            factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = false } },
-                            update = { it.player = player },
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        Box(Modifier.fillMaxSize()) {
+                            AndroidView(
+                                factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = false; setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING) } },
+                                update = { it.player = player },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            GlassVideoControls(player, accent, Modifier.fillMaxSize())
+                        }
                     }
                 }
             } else {
