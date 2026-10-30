@@ -15,7 +15,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -36,13 +35,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -93,7 +89,13 @@ class MainActivity : ComponentActivity() {
                 )
             }
             val player = controllerState.value
-            if (player == null) {
+            if (previousCrash != null) {
+                // A crash report is waiting: show ONLY the report (plain dark screen) so the app cannot
+                // crash again before the report has been copied. The player UI starts after the dialog is closed.
+                MaterialTheme(colorScheme = darkColorScheme(primary = Cyan, background = Ink, surface = Panel)) {
+                    Surface(Modifier.fillMaxSize(), color = Ink) {}
+                }
+            } else if (player == null) {
                 MaterialTheme(colorScheme = darkColorScheme(primary = Cyan, background = Ink, surface = Panel)) {
                     Surface(Modifier.fillMaxSize(), color = Ink) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -222,14 +224,17 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val previousRequestedOrientation = remember(activity) { activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    // Fullscreen video: rotate to the video's real orientation (landscape video -> landscape with
+    // automatic left/right rotation, portrait video -> portrait) and restore the previous orientation on exit.
     LaunchedEffect(fullScreenVideo, playbackUiRevision) {
         val host = activity ?: return@LaunchedEffect
         if (fullScreenVideo && selected?.let { isVideo(it) } == true) {
             val videoSize = player.videoSize
-            host.requestedOrientation = if (videoSize.width > videoSize.height) {
+            if (videoSize.width <= 0 || videoSize.height <= 0) return@LaunchedEffect // size not known yet
+            host.requestedOrientation = if (videoSize.width >= videoSize.height) {
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             } else {
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             }
         } else {
             host.requestedOrientation = previousRequestedOrientation
@@ -365,54 +370,23 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     }
 
     MaterialTheme(colorScheme = darkColorScheme(primary = accent, secondary = Violet, background = Ink, surface = Panel)) {
-        Scaffold(containerColor = Ink, bottomBar = {
-            NKGlassCard(
-                tint = Color(0xD90B1220),
-                shape = RoundedCornerShape(24.dp),
-                stroke = GlassStroke,
-                elevation = 18.dp
-            ) {
-            NavigationBar(
-                containerColor = Color.Transparent,
-                tonalElevation = 0.dp
-            ) {
-                listOf("Home", "Audio", "Video", "Studio").forEachIndexed { index, label ->
-                    NavigationBarItem(
-                        selected = tab == index,
-                        onClick = { tab = index },
-                        icon = {
-                            Icon(when (index) {
-                                0 -> Icons.Default.Home
-                                1 -> Icons.Default.MusicNote
-                                2 -> Icons.Default.VideoLibrary
-                                else -> Icons.Default.Tune
-                            }, contentDescription = label)
-                        },
-                        label = { Text(label, fontWeight = if (tab == index) FontWeight.Bold else FontWeight.Medium) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = accent,
-                            selectedTextColor = accent,
-                            indicatorColor = accent.copy(alpha = 0.13f),
-                            unselectedIconColor = Color(0xFF8492A7),
-                            unselectedTextColor = Color(0xFF8492A7)
-                        )
-                    )
-                }
-            }
-            }
+        NKAmbientBackground(accent = accent, modifier = Modifier.fillMaxSize()) {
+        Scaffold(containerColor = Color.Transparent, bottomBar = {
+            NKLiquidNavBar(
+                items = listOf(
+                    NKNavItem("Home", Icons.Default.Home),
+                    NKNavItem("Audio", Icons.Default.MusicNote),
+                    NKNavItem("Video", Icons.Default.VideoLibrary),
+                    NKNavItem("Studio", Icons.Default.Tune)
+                ),
+                selectedIndex = tab,
+                onSelect = { tab = it },
+                accent = accent,
+                modifier = Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp)
+            )
         }) { padding ->
             Column(
                 Modifier.fillMaxSize().padding(padding)
-                    .background(
-                        Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.0f to Color(0xFF0A1220),
-                                0.38f to Color(0xFF101629),
-                                0.72f to Color(0xFF0B1220),
-                                1.0f to Ink
-                            )
-                        )
-                    )
                     .padding(horizontal = 18.dp)
             ) {
                 Spacer(Modifier.height(14.dp))
@@ -420,19 +394,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                     Modifier.fillMaxWidth().padding(vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        color = accent.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(17.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.38f)),
-                        shadowElevation = 10.dp,
-                        modifier = Modifier.size(52.dp)
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.mipmap.ic_launcher),
-                            contentDescription = "NK PLAYER logo",
-                            modifier = Modifier.padding(5.dp)
-                        )
-                    }
+                    NKLogoMark(size = 52.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("NK PLAYER", color = Color.White, fontSize = 23.sp,
@@ -445,10 +407,10 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 letterSpacing = 1.55.sp, fontWeight = FontWeight.Bold)
                         }
                     }
-                    Surface(
-                        color = Color(0xB81A2638),
+                    NKGlassCard(
+                        tint = Color(0x661A2638),
                         shape = RoundedCornerShape(14.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, GlassStroke)
+                        elevation = 4.dp
                     ) {
                         Icon(Icons.Default.GraphicEq, contentDescription = "Audio player",
                             tint = accent, modifier = Modifier.padding(11.dp).size(20.dp))
@@ -473,9 +435,13 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 Text(if (tracks.isEmpty()) "Start by importing your favourite files" else "${tracks.size} item(s) ready to play",
                                     color = Color.Gray, fontSize = 11.sp)
                             }
-                            Surface(color = Panel, shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.size(42.dp).clickable { picker.launch(arrayOf("audio/*", "video/*")) }) {
-                                Box(contentAlignment = Alignment.Center) {
+                            NKGlassCard(
+                                tint = Color(0x661A2638),
+                                shape = RoundedCornerShape(12.dp),
+                                elevation = 4.dp,
+                                modifier = Modifier.size(42.dp).clickable { picker.launch(arrayOf("audio/*", "video/*")) }
+                            ) {
+                                Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
                                     Icon(Icons.Default.Add, contentDescription = "Import media", tint = accent)
                                 }
                             }
@@ -488,8 +454,12 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                         }
                         if (tracks.isEmpty()) {
                             Spacer(Modifier.height(10.dp))
-                            Surface(color = Color(0xFF101B2B), shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth()) {
+                            NKGlassCard(
+                                tint = Color(0x80101B2B),
+                                shape = RoundedCornerShape(14.dp),
+                                elevation = 2.dp,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.TipsAndUpdates, null, tint = accent, modifier = Modifier.size(20.dp))
                                     Spacer(Modifier.width(9.dp))
@@ -669,6 +639,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                 Spacer(Modifier.height(8.dp))
             }
         }
+        }
         if (subtitleDialog && selected?.let { isVideo(it) } == true) {
             val textGroups = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
             AlertDialog(
@@ -731,24 +702,12 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             )
         }
         if (fullScreenVideo && selected?.let { isVideo(it) } == true) {
-            Dialog(
-                onDismissRequest = { fullScreenVideo = false },
-                properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-            ) {
-                Box(Modifier.fillMaxSize().background(Color.Black)) {
-                    AndroidView(
-                        factory = { context -> PlayerView(context).apply { this.player = player; useController = true } },
-                        update = { it.player = player },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    IconButton(
-                        onClick = { fullScreenVideo = false },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Exit full screen", tint = Color.White)
-                    }
-                }
-            }
+            NKFullScreenVideo(
+                player = player,
+                title = selected?.name.orEmpty(),
+                accent = accent,
+                onClose = { fullScreenVideo = false }
+            )
         }
     }
 }
@@ -771,9 +730,9 @@ private fun playTrack(track: Track, queue: List<Track>, player: Player) {
 
 @Composable
 private fun StudioHeader(accent: Color, themeName: String) {
-    Surface(color = Panel, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+    NKGlassCard(tint = Panel, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
         Row(
-            Modifier.background(Brush.linearGradient(listOf(Color(0xFF1A2940), Color(0xFF211B39), Color(0xFF111827))))
+            Modifier.background(Brush.linearGradient(listOf(Color(0x661A2940), Color(0x66211B39), Color(0x33111827))))
                 .padding(17.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -855,7 +814,7 @@ private fun LibraryTabHeader(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            Modifier.background(Brush.horizontalGradient(listOf(Color(0xFF17283B), Color(0xFF17172B))))
+            Modifier.background(Brush.horizontalGradient(listOf(Color(0x6617283B), Color(0x6617172B))))
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -884,13 +843,13 @@ private fun LibraryTabHeader(
 private fun HomeHero(accent: Color, onImport: () -> Unit) {
     NKGlassCard(
         shape = RoundedCornerShape(NKDesignTokens.Radius.hero),
-        tint = Color(0xB8172336),
+        tint = Color(0x8F172336),
         stroke = accent.copy(alpha = 0.30f),
         elevation = 20.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         NKAuroraBackdrop(
-            colors = listOf(Color(0xFF163A51), Color(0xFF292044), Color(0xFF111827))
+            colors = listOf(Color(0x99163A51), Color(0x99292044), Color(0x66111827))
         ) {
             Column(Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

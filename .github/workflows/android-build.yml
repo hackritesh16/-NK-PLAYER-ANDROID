@@ -13,6 +13,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Generate launcher icons from the NK PLAYER logo
+        # Uses nk-icon.png (repo root or branding/) or any single square PNG >= 512px in the repo root.
+        # If no logo PNG is found the existing icon is kept and the build continues.
+        continue-on-error: true
+        run: |
+          python3 -m pip install --quiet --break-system-packages pillow || python3 -m pip install --quiet pillow
+          python3 tools/make_icons.py
       - name: Verify UI/UX Pro Max skill
         run: |
           python3 -m py_compile .agents/skills/ui-ux-pro-max/scripts/*.py
