@@ -401,7 +401,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                     )
                 }
             ) { padding ->
-                Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp)) {
+                Column(Modifier.nkNavHazeSource().fillMaxSize().padding(padding).padding(horizontal = 18.dp)) {
                     Spacer(Modifier.height(8.dp))
                     AppHeader(accent, themeName) { tab = 3 }
                     Spacer(Modifier.height(12.dp))
