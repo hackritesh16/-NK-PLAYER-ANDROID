@@ -113,6 +113,8 @@ private enum class HudKind { Brightness, Volume }
  *  - pinch                           : zoom in / out (two-finger drag pans while zoomed)
  *  - single tap                      : show / hide controls
  * Lock button: ignores every touch except revealing the unlock button.
+ * The lock icon shows the CURRENT state: open padlock = controls are free (tap to lock),
+ * closed padlock = controls are locked (tap to unlock).
  */
 @Composable
 fun NKFullScreenVideo(
@@ -523,6 +525,7 @@ fun NKFullScreenVideo(
                             }
                         }
                         Spacer(Modifier.width(10.dp))
+                        // Not locked right now -> OPEN padlock (state). Tapping it locks the controls.
                         NKLiquidGlassButton(
                             onClick = {
                                 locked = true
@@ -533,7 +536,7 @@ fun NKFullScreenVideo(
                             size = 52.dp,
                             contentDescription = "Lock controls"
                         ) {
-                            Icon(Icons.Default.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                            Icon(Icons.Default.LockOpen, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                         }
                     }
                 }
@@ -549,6 +552,7 @@ fun NKFullScreenVideo(
                 Box(
                     Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 14.dp, vertical = 10.dp)
                 ) {
+                    // Locked right now -> CLOSED padlock (state). Tapping it unlocks the controls.
                     NKLiquidGlassButton(
                         onClick = {
                             locked = false
@@ -561,7 +565,7 @@ fun NKFullScreenVideo(
                         modifier = Modifier.align(Alignment.BottomEnd),
                         contentDescription = "Unlock controls"
                     ) {
-                        Icon(Icons.Default.LockOpen, contentDescription = null, tint = accent, modifier = Modifier.size(26.dp))
+                        Icon(Icons.Default.Lock, contentDescription = null, tint = accent, modifier = Modifier.size(26.dp))
                     }
                 }
             }
