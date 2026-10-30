@@ -1,6 +1,0 @@
-EXAMPLE FILE - ise delete karke apni PNG upload karo.
-
-Theme: Neon Blue (accent colour #48E5FF)
-Size: 512 x 512 px
-Format: PNG, TRANSPARENT background (bg remove), kinare ~10% khaali
-Final naam: nk_logo_neon_blue.png

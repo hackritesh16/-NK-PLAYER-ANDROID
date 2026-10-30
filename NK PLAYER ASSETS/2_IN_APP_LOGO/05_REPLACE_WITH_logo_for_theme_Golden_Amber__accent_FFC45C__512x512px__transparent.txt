@@ -1,6 +1,0 @@
-EXAMPLE FILE - ise delete karke apni PNG upload karo.
-
-Theme: Golden Amber (accent colour #FFC45C)
-Size: 512 x 512 px
-Format: PNG, TRANSPARENT background (bg remove), kinare ~10% khaali
-Final naam: nk_logo_golden_amber.png
