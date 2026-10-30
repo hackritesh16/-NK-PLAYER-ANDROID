@@ -45,6 +45,8 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
@@ -112,6 +114,7 @@ private enum class HudKind { Brightness, Volume }
  *  - double tap left / right half    : 10 s backward / forward
  *  - pinch                           : zoom in / out (two-finger drag pans while zoomed)
  *  - single tap                      : show / hide controls
+ * Buttons: previous video, back 10 s, play/pause, forward 10 s, next video, lock.
  * Lock button: ignores every touch except revealing the unlock button.
  * The lock icon shows the CURRENT state: open padlock = controls are free (tap to lock),
  * closed padlock = controls are locked (tap to unlock).
@@ -450,8 +453,16 @@ fun NKFullScreenVideo(
                     Row(
                         Modifier.align(Alignment.Center),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(26.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        NKLiquidGlassButton(
+                            onClick = { player.seekToPreviousMediaItem(); interactionTick++ },
+                            accent = accent,
+                            size = 48.dp,
+                            contentDescription = "Previous video"
+                        ) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+                        }
                         NKLiquidGlassButton(
                             onClick = { seekBy(-10_000L); interactionTick++ },
                             accent = accent,
@@ -482,6 +493,14 @@ fun NKFullScreenVideo(
                             contentDescription = "Forward 10 seconds"
                         ) {
                             Icon(Icons.Default.Forward10, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                        }
+                        NKLiquidGlassButton(
+                            onClick = { player.seekToNextMediaItem(); interactionTick++ },
+                            accent = accent,
+                            size = 48.dp,
+                            contentDescription = "Next video"
+                        ) {
+                            Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
                         }
                     }
 
