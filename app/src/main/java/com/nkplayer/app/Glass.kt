@@ -120,14 +120,22 @@ private val LocalNkNavHazeState = staticCompositionLocalOf<HazeState?> { null }
 @Composable
 fun Modifier.nkBackdropBlur(): Modifier {
     val state = LocalNkHazeState.current ?: return this
-    return hazeEffect(state = state, style = HazeMaterials.ultraThin())
+    return hazeEffect(state = state, style = HazeMaterials.ultraThin()) {
+        // Haze disables blur by default on API 31; NK PLAYER requires Android 12+,
+        // so explicitly enable the real blur on the supported minimum API.
+        blurEnabled = true
+    }
 }
 
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun Modifier.nkNavBackdropBlur(): Modifier {
     val state = LocalNkNavHazeState.current ?: return this
-    return hazeEffect(state = state, style = HazeMaterials.ultraThin())
+    return hazeEffect(state = state, style = HazeMaterials.ultraThin()) {
+        // Haze disables blur by default on API 31; NK PLAYER requires Android 12+,
+        // so explicitly enable the real blur on the supported minimum API.
+        blurEnabled = true
+    }
 }
 
 @Composable
