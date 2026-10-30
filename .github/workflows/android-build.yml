@@ -13,6 +13,45 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Install NK PLAYER assets (launcher icon and in-app logos)
+        # Copies the PNGs from "NK PLAYER ASSETS" into the app resources.
+        # Strict on purpose: a missing, misnamed, non-PNG or non-square file stops the build with a clear message.
+        run: |
+          set -euo pipefail
+          ASSETS="NK PLAYER ASSETS"
+          DEST="app/src/main/res/drawable-nodpi"
+          mkdir -p "$DEST"
+          FILES="1_LAUNCHER_ICON/nk_launcher_foreground.png 1_LAUNCHER_ICON/nk_launcher_monochrome.png 2_IN_APP_LOGO/nk_logo_neon_blue.png 2_IN_APP_LOGO/nk_logo_cyber_purple.png 2_IN_APP_LOGO/nk_logo_emerald_green.png 2_IN_APP_LOGO/nk_logo_crimson_red.png 2_IN_APP_LOGO/nk_logo_golden_amber.png"
+          for f in $FILES; do
+            if [ ! -f "$ASSETS/$f" ]; then
+              echo "::error::Missing asset: $ASSETS/$f (check the exact file name and folder)"
+              exit 1
+            fi
+          done
+          python3 - <<'PY'
+          import struct, sys
+          base = "NK PLAYER ASSETS/"
+          files = """1_LAUNCHER_ICON/nk_launcher_foreground.png 1_LAUNCHER_ICON/nk_launcher_monochrome.png 2_IN_APP_LOGO/nk_logo_neon_blue.png 2_IN_APP_LOGO/nk_logo_cyber_purple.png 2_IN_APP_LOGO/nk_logo_emerald_green.png 2_IN_APP_LOGO/nk_logo_crimson_red.png 2_IN_APP_LOGO/nk_logo_golden_amber.png""".split()
+          bad = False
+          for f in files:
+              with open(base + f, "rb") as fh:
+                  head = fh.read(33)
+              if head[:8] != b"\x89PNG\r\n\x1a\n":
+                  print("::error::" + f + " is not a real PNG file (re-export it as PNG)")
+                  bad = True
+                  continue
+              w, h = struct.unpack(">II", head[16:24])
+              color_type = head[25]
+              print(f, str(w) + "x" + str(h), "alpha" if color_type in (4, 6) else "no-alpha-channel")
+              if w != h:
+                  print("::error::" + f + " is " + str(w) + "x" + str(h) + " - it must be a square image")
+                  bad = True
+          sys.exit(1 if bad else 0)
+          PY
+          for f in $FILES; do
+            cp "$ASSETS/$f" "$DEST/$(basename "$f")"
+          done
+          ls -l "$DEST"
       - name: Verify UI/UX Pro Max skill
         run: |
           python3 -m py_compile .agents/skills/ui-ux-pro-max/scripts/*.py
