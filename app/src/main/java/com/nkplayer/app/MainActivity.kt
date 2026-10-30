@@ -386,7 +386,20 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             Scaffold(
                 containerColor = Color.Transparent,
                 contentColor = Color.White,
-                bottomBar = { GlassNavBar(tab, accent) { tab = it } }
+                bottomBar = {
+                    NKLiquidNavBar(
+                        items = listOf(
+                            NKNavItem("Home", Icons.Default.Home),
+                            NKNavItem("Audio", Icons.Default.MusicNote),
+                            NKNavItem("Video", Icons.Default.VideoLibrary),
+                            NKNavItem("Studio", Icons.Default.Tune)
+                        ),
+                        selectedIndex = tab,
+                        onSelect = { tab = it },
+                        accent = accent,
+                        modifier = Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp)
+                    )
+                }
             ) { padding ->
                 Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp)) {
                     Spacer(Modifier.height(8.dp))
@@ -636,43 +649,6 @@ private fun AppHeader(accent: Color, onStudio: () -> Unit) {
                 fontWeight = FontWeight.Bold)
         }
         GlassIconButton(Icons.Default.GraphicEq, "Open studio", onStudio, tint = accent)
-    }
-}
-
-@Composable
-private fun GlassNavBar(selected: Int, accent: Color, onSelect: (Int) -> Unit) {
-    val items = listOf(
-        "Home" to Icons.Default.Home,
-        "Audio" to Icons.Default.MusicNote,
-        "Video" to Icons.Default.VideoLibrary,
-        "Studio" to Icons.Default.Tune
-    )
-    Row(
-        Modifier
-            .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 10.dp)
-            .fillMaxWidth()
-            .glass(RoundedCornerShape(30.dp), 1.3f)
-            .padding(6.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items.forEachIndexed { index, (label, icon) ->
-            val on = index == selected
-            Column(
-                Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(if (on) accent.copy(alpha = 0.22f) else Color.Transparent)
-                    .clickable(onClick = { onSelect(index) })
-                    .padding(vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(icon, contentDescription = label, tint = if (on) accent else Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.size(22.dp))
-                Text(label, color = if (on) accent else Color.White.copy(alpha = 0.7f), fontSize = 11.sp,
-                    fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
-            }
-        }
     }
 }
 
