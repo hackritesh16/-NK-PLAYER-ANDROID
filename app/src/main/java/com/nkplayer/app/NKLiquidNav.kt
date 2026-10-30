@@ -149,7 +149,7 @@ fun NKLiquidNavBar(
                 spotColor = Color.Black
             )
             .clip(barShape)
-            .nkBackdropBlur()
+            .nkNavBackdropBlur()
             .background(Color(0xCC0B1220))
             .background(
                 Brush.verticalGradient(
