@@ -161,6 +161,15 @@ fun NkTheme(palette: NkPalette, content: @Composable () -> Unit) {
 
 private val BlurSupported: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
+/** Blur radius of floating glass. Lower = list shapes stay recognisable underneath. */
+private val FloatingBlurRadius: Dp = 14.dp
+
+/** With live blur the dark tint is scaled down so the blurred list actually shows through. */
+private const val LiveTintScale = 0.3f
+
+/** With live blur the white wash of the glass material is scaled down for the same reason. */
+private const val LiveWashScale = 0.6f
+
 @Stable
 class GlassBackdrop internal constructor(internal val contentLayer: GraphicsLayer) {
     var palette by mutableStateOf(NkPalettes.first())
@@ -251,7 +260,7 @@ fun Modifier.glassSource(backdrop: GlassBackdrop?): Modifier =
         }
 
 /** Blurred copy of gradient + source content behind this node. No-op below Android 12. */
-private fun Modifier.backdropBlur(radius: Dp = 22.dp): Modifier = composed {
+private fun Modifier.backdropBlur(radius: Dp = FloatingBlurRadius): Modifier = composed {
     val backdrop = LocalGlassBackdrop.current
     val layer = rememberGraphicsLayer()
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -298,7 +307,7 @@ fun Modifier.glassBlurFill(
     val live = enabled && BlurSupported && LocalGlassBackdrop.current != null
     when {
         !enabled -> Modifier
-        live -> Modifier.backdropBlur().background(tint)
+        live -> Modifier.backdropBlur().background(tint.copy(alpha = tint.alpha * LiveTintScale))
         else -> Modifier.background(fallback)
     }
 }
@@ -332,8 +341,10 @@ fun Modifier.glass(
     blur: Boolean = false
 ): Modifier = composed {
     val accent = MaterialTheme.colorScheme.primary
-    val topAlpha = (0.17f * strength).coerceAtMost(0.5f)
-    val bottomAlpha = (0.06f * strength).coerceAtMost(0.3f)
+    val live = blur && BlurSupported && LocalGlassBackdrop.current != null
+    val wash = if (live) LiveWashScale else 1f
+    val topAlpha = (0.17f * strength * wash).coerceAtMost(0.5f)
+    val bottomAlpha = (0.06f * strength * wash).coerceAtMost(0.3f)
     val sheenAlpha = (0.10f * strength).coerceAtMost(0.22f)
     Modifier
         .clip(shape)
