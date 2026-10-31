@@ -161,14 +161,21 @@ fun NkTheme(palette: NkPalette, content: @Composable () -> Unit) {
 
 private val BlurSupported: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
+/**
+ * TEMPORARY DIAGNOSTIC. While true, floating glass shows a solid red backdrop with the blurred list
+ * drawn over it, so it is obvious whether (a) the blur pipeline runs and (b) the list reaches it.
+ * Set to false once confirmed.
+ */
+private const val GlassDebug = true
+
 /** Blur radius of floating glass. Lower = list shapes stay recognisable underneath. */
-private val FloatingBlurRadius: Dp = 14.dp
+private val FloatingBlurRadius: Dp = if (GlassDebug) 6.dp else 14.dp
 
 /** With live blur the dark tint is scaled down so the blurred list actually shows through. */
-private const val LiveTintScale = 0.3f
+private val LiveTintScale = if (GlassDebug) 0f else 0.3f
 
 /** With live blur the white wash of the glass material is scaled down for the same reason. */
-private const val LiveWashScale = 0.6f
+private val LiveWashScale = if (GlassDebug) 0f else 0.6f
 
 @Stable
 class GlassBackdrop internal constructor(internal val contentLayer: GraphicsLayer) {
@@ -284,7 +291,11 @@ private fun Modifier.backdropBlur(radius: Dp = FloatingBlurRadius): Modifier = c
                         IntSize(size.width.roundToInt().coerceAtLeast(1), size.height.roundToInt().coerceAtLeast(1))
                     ) {
                         translate(-rel.x, -rel.y) {
-                            drawGlassBackdrop(backdrop.palette, t, rootW, rootH)
+                            if (GlassDebug) {
+                                drawRect(Color(0xFFB00020), size = Size(rootW, rootH))
+                            } else {
+                                drawGlassBackdrop(backdrop.palette, t, rootW, rootH)
+                            }
                             translate(contentRel.x, contentRel.y) { drawLayer(backdrop.contentLayer) }
                         }
                     }
