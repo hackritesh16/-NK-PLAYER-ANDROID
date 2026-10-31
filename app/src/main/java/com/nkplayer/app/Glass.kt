@@ -6,17 +6,24 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.util.LruCache
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,17 +31,30 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
@@ -43,12 +63,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 // ---------------------------------------------------------------------------------------------
 // Fonts: Unbounded (display) + Manrope (text). Downloaded into res/font by the fetchFonts task.
@@ -126,77 +148,256 @@ fun NkTheme(palette: NkPalette, content: @Composable () -> Unit) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Glass building blocks
+// Backdrop engine: real blur of what sits behind a floating glass surface (Android 12+).
+//
+// How it works (no third-party library):
+//  1. GlassBackground owns a GlassBackdrop and re-draws the animated gradient on demand.
+//  2. The scrolling content area is tagged with Modifier.glassSource(backdrop); it records itself
+//     into a GraphicsLayer.
+//  3. A floating surface (nav bar, mini player) draws the gradient + that layer, shifted to its own
+//     position, into its own layer with a RenderEffect blur, then paints the glass material on top.
+// Below Android 12 the blur is skipped and a darker translucent fill keeps text readable.
 // ---------------------------------------------------------------------------------------------
+
+private val BlurSupported: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+@Stable
+class GlassBackdrop internal constructor(internal val contentLayer: GraphicsLayer) {
+    var palette by mutableStateOf(NkPalettes.first())
+    internal var shiftState: State<Float> = mutableFloatStateOf(0f)
+    var contentOrigin by mutableStateOf(Offset.Zero)
+    var rootOrigin by mutableStateOf(Offset.Zero)
+    var rootSize by mutableStateOf(IntSize.Zero)
+    internal val version = mutableIntStateOf(0)
+    internal var counter = 0
+}
+
+val LocalGlassBackdrop = staticCompositionLocalOf<GlassBackdrop?> { null }
+
+@Composable
+fun rememberGlassBackdrop(): GlassBackdrop {
+    val layer = rememberGraphicsLayer()
+    return remember(layer) { GlassBackdrop(layer) }
+}
+
+/** Paints the animated gradient + colour glows for a canvas of [w] x [h] pixels. */
+internal fun DrawScope.drawGlassBackdrop(p: NkPalette, t: Float, w: Float, h: Float) {
+    drawRect(
+        Brush.verticalGradient(listOf(p.bgTop, p.bgMid, p.bgBottom), startY = 0f, endY = h),
+        size = Size(w, h)
+    )
+    val c1 = Offset(w * (0.95f - 0.25f * t), h * (0.06f + 0.06f * t))
+    drawCircle(
+        Brush.radialGradient(listOf(p.accent.copy(alpha = 0.30f), Color.Transparent), center = c1, radius = w * 0.8f),
+        radius = w * 0.8f,
+        center = c1
+    )
+    val c2 = Offset(w * (0.02f + 0.25f * t), h * (0.58f - 0.08f * t))
+    drawCircle(
+        Brush.radialGradient(listOf(Color(0xFFB04CFF).copy(alpha = 0.24f), Color.Transparent), center = c2, radius = w * 0.85f),
+        radius = w * 0.85f,
+        center = c2
+    )
+    val c3 = Offset(w * 0.9f, h * 0.95f)
+    drawCircle(
+        Brush.radialGradient(listOf(p.accent.copy(alpha = 0.16f), Color.Transparent), center = c3, radius = w * 0.7f),
+        radius = w * 0.7f,
+        center = c3
+    )
+}
 
 /** Slowly drifting gradient with soft colour glows; this is what the glass layers sit on. */
 @Composable
 fun GlassBackground(p: NkPalette, content: @Composable BoxScope.() -> Unit) {
     val transition = rememberInfiniteTransition(label = "glow")
-    val t by transition.animateFloat(
+    val tState = transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(16000, easing = LinearEasing), RepeatMode.Reverse),
         label = "glowShift"
     )
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(p.bgTop, p.bgMid, p.bgBottom)))
-            .drawBehind {
-                val w = size.width
-                val h = size.height
-                val c1 = Offset(w * (0.95f - 0.25f * t), h * (0.06f + 0.06f * t))
-                drawCircle(
-                    Brush.radialGradient(listOf(p.accent.copy(alpha = 0.30f), Color.Transparent), center = c1, radius = w * 0.8f),
-                    radius = w * 0.8f,
-                    center = c1
-                )
-                val c2 = Offset(w * (0.02f + 0.25f * t), h * (0.58f - 0.08f * t))
-                drawCircle(
-                    Brush.radialGradient(listOf(Color(0xFFB04CFF).copy(alpha = 0.24f), Color.Transparent), center = c2, radius = w * 0.85f),
-                    radius = w * 0.85f,
-                    center = c2
-                )
-                val c3 = Offset(w * 0.9f, h * 0.95f)
-                drawCircle(
-                    Brush.radialGradient(listOf(p.accent.copy(alpha = 0.16f), Color.Transparent), center = c3, radius = w * 0.7f),
-                    radius = w * 0.7f,
-                    center = c3
-                )
-            },
-        content = content
-    )
+    val backdrop = rememberGlassBackdrop()
+    backdrop.shiftState = tState
+    SideEffect { backdrop.palette = p }
+    CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .onGloballyPositioned {
+                    backdrop.rootOrigin = it.positionInRoot()
+                    backdrop.rootSize = it.size
+                }
+                .drawBehind { drawGlassBackdrop(p, tState.value, size.width, size.height) },
+            content = content
+        )
+    }
 }
 
-/** Frosted-glass surface: translucent white gradient, bright hairline border on the top-left edge. */
-fun Modifier.glass(shape: Shape = RoundedCornerShape(22.dp), strength: Float = 1f): Modifier = this
-    .clip(shape)
-    .background(
-        Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = (0.17f * strength).coerceAtMost(0.5f)),
-                Color.White.copy(alpha = (0.06f * strength).coerceAtMost(0.3f))
+/** Tag the scrolling content that floating glass should blur (list area, page body). */
+fun Modifier.glassSource(backdrop: GlassBackdrop?): Modifier =
+    if (backdrop == null) this else this
+        .onGloballyPositioned { backdrop.contentOrigin = it.positionInRoot() }
+        .drawWithContent {
+            val layer = backdrop.contentLayer
+            val w = size.width.roundToInt().coerceAtLeast(1)
+            val h = size.height.roundToInt().coerceAtLeast(1)
+            layer.record(this, layoutDirection, IntSize(w, h)) {
+                this@drawWithContent.drawContent()
+            }
+            drawLayer(layer)
+            // Tell blurred surfaces that the content changed (scrolling) so they refresh.
+            backdrop.counter += 1
+            backdrop.version.intValue = backdrop.counter
+        }
+
+/** Blurred copy of gradient + source content behind this node. No-op below Android 12. */
+private fun Modifier.backdropBlur(radius: Dp = 22.dp): Modifier = composed {
+    val backdrop = LocalGlassBackdrop.current
+    val layer = rememberGraphicsLayer()
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    if (backdrop == null || !BlurSupported) {
+        Modifier
+    } else {
+        Modifier
+            .onGloballyPositioned { origin = it.positionInRoot() }
+            .drawBehind {
+                backdrop.version.intValue // subscribe: redraw when the source content changes
+                val t = backdrop.shiftState.value
+                val rootW = backdrop.rootSize.width.toFloat()
+                val rootH = backdrop.rootSize.height.toFloat()
+                if (rootW > 0f && rootH > 0f && size.width >= 1f && size.height >= 1f) {
+                    val rel = origin - backdrop.rootOrigin
+                    val contentRel = backdrop.contentOrigin - backdrop.rootOrigin
+                    val px = radius.toPx()
+                    layer.record(
+                        this,
+                        layoutDirection,
+                        IntSize(size.width.roundToInt().coerceAtLeast(1), size.height.roundToInt().coerceAtLeast(1))
+                    ) {
+                        translate(-rel.x, -rel.y) {
+                            drawGlassBackdrop(backdrop.palette, t, rootW, rootH)
+                            translate(contentRel.x, contentRel.y) { drawLayer(backdrop.contentLayer) }
+                        }
+                    }
+                    layer.renderEffect = BlurEffect(px, px, TileMode.Clamp)
+                    drawLayer(layer)
+                }
+            }
+    }
+}
+
+/**
+ * Fill for a floating glass surface: real backdrop blur plus [tint] when available,
+ * otherwise a darker translucent [fallback] so text stays readable.
+ */
+fun Modifier.glassBlurFill(
+    tint: Color = Color(0x990B1220),
+    fallback: Color = Color(0xCC0B1220),
+    enabled: Boolean = true
+): Modifier = composed {
+    val live = enabled && BlurSupported && LocalGlassBackdrop.current != null
+    when {
+        !enabled -> Modifier
+        live -> Modifier.backdropBlur().background(tint)
+        else -> Modifier.background(fallback)
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Glass material + jelly press
+// ---------------------------------------------------------------------------------------------
+
+/** Squashes slightly while pressed and springs back with a small overshoot (jelly feel). */
+fun Modifier.pressScale(interaction: InteractionSource, pressedScale: Float = 0.955f): Modifier = composed {
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) pressedScale else 1f,
+        animationSpec = spring(dampingRatio = 0.42f, stiffness = 380f),
+        label = "nk-press-scale"
+    )
+    Modifier.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
+}
+
+/**
+ * Frosted-glass surface: translucent gradient, soft diagonal sheen, a bright specular line on the top
+ * edge and a rim that fades from white to the accent colour. With [blur] = true the surface also
+ * blurs whatever is behind it (use for floating bars; plain cards keep blur = false for speed).
+ */
+fun Modifier.glass(
+    shape: Shape = RoundedCornerShape(22.dp),
+    strength: Float = 1f,
+    blur: Boolean = false
+): Modifier = composed {
+    val accent = MaterialTheme.colorScheme.primary
+    val topAlpha = (0.17f * strength).coerceAtMost(0.5f)
+    val bottomAlpha = (0.06f * strength).coerceAtMost(0.3f)
+    val sheenAlpha = (0.10f * strength).coerceAtMost(0.22f)
+    Modifier
+        .clip(shape)
+        .glassBlurFill(tint = Color(0x400B1220), fallback = Color(0xB30B1220), enabled = blur)
+        .background(
+            Brush.verticalGradient(
+                listOf(Color.White.copy(alpha = topAlpha), Color.White.copy(alpha = bottomAlpha))
             )
         )
-    )
-    .border(
-        1.dp,
-        Brush.linearGradient(
-            listOf(Color.White.copy(alpha = 0.50f), Color.White.copy(alpha = 0.05f), Color.White.copy(alpha = 0.22f))
-        ),
-        shape
-    )
+        .drawBehind {
+            // Soft diagonal sheen across the upper-left of the surface.
+            drawRect(
+                Brush.linearGradient(
+                    colors = listOf(Color.White.copy(alpha = sheenAlpha), Color.Transparent),
+                    start = Offset.Zero,
+                    end = Offset(size.width * 0.65f, size.height * 0.65f)
+                )
+            )
+            // Specular line hugging the top edge.
+            val inset = minOf(size.minDimension * 0.3f, 24.dp.toPx())
+            if (size.width > inset * 2f + 8f) {
+                drawLine(
+                    brush = Brush.horizontalGradient(
+                        listOf(Color.Transparent, Color.White.copy(alpha = 0.50f), Color.Transparent),
+                        startX = inset,
+                        endX = size.width - inset
+                    ),
+                    start = Offset(inset, 1.dp.toPx()),
+                    end = Offset(size.width - inset, 1.dp.toPx()),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
+        }
+        .border(
+            1.dp,
+            Brush.linearGradient(
+                listOf(
+                    Color.White.copy(alpha = 0.55f),
+                    Color.White.copy(alpha = 0.05f),
+                    accent.copy(alpha = 0.32f)
+                )
+            ),
+            shape
+        )
+}
 
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(22.dp),
     strength: Float = 1f,
+    blur: Boolean = false,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val base = modifier.glass(shape, strength).let { if (onClick != null) it.clickable(onClick = onClick) else it }
+    val interaction = remember { MutableInteractionSource() }
+    val base = modifier
+        .let { if (onClick != null) it.pressScale(interaction, 0.975f) else it }
+        .glass(shape, strength, blur)
+        .let {
+            if (onClick != null) {
+                it.clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
+            } else it
+        }
     Column(base, content = content)
 }
 
@@ -210,9 +411,14 @@ fun GlassIconButton(
     tint: Color = Color.White,
     filled: Color? = null
 ) {
+    val interaction = remember { MutableInteractionSource() }
     val look = if (filled != null) Modifier.clip(CircleShape).background(filled) else Modifier.glass(CircleShape)
     Box(
-        modifier.size(size).then(look).clickable(onClick = onClick),
+        modifier
+            .size(size)
+            .pressScale(interaction, 0.90f)
+            .then(look)
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, description, tint = tint, modifier = Modifier.size(size * 0.5f))
@@ -222,12 +428,22 @@ fun GlassIconButton(
 @Composable
 fun AccentButton(text: String, icon: ImageVector?, accent: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val ink = Color(0xFF07101C)
+    val interaction = remember { MutableInteractionSource() }
     Row(
         modifier
             .height(52.dp)
+            .pressScale(interaction, 0.96f)
             .clip(RoundedCornerShape(18.dp))
             .background(Brush.horizontalGradient(listOf(accent, lerp(accent, Color(0xFFB04CFF), 0.5f))))
-            .clickable(onClick = onClick)
+            .drawBehind {
+                drawRect(
+                    Brush.verticalGradient(
+                        listOf(Color.White.copy(alpha = 0.28f), Color.Transparent),
+                        endY = size.height * 0.55f
+                    )
+                )
+            }
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
@@ -249,11 +465,17 @@ fun GlassChip(
     onClick: (() -> Unit)? = null
 ) {
     val shape = RoundedCornerShape(50)
+    val interaction = remember { MutableInteractionSource() }
     val look = Modifier
+        .let { if (onClick != null) it.pressScale(interaction, 0.93f) else it }
         .clip(shape)
         .background(if (active) accent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.10f))
         .border(1.dp, if (active) accent.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.22f), shape)
-        .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+        .let {
+            if (onClick != null) {
+                it.clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
+            } else it
+        }
     Row(look.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) {
             Icon(icon, null, tint = if (active) accent else Color.White.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
