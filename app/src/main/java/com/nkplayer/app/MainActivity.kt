@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -383,6 +384,8 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
 
     NkTheme(palette) {
         GlassBackground(palette) {
+            val backdrop = LocalGlassBackdrop.current
+            val layoutDirection = LocalLayoutDirection.current
             Scaffold(
                 containerColor = Color.Transparent,
                 contentColor = Color.White,
@@ -401,104 +404,120 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                     )
                 }
             ) { padding ->
-                Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp)) {
+                // The page body runs to the bottom of the screen so lists scroll *under* the floating
+                // mini player and nav bar (which blur what passes beneath them).
+                val bottomInset = padding.calculateBottomPadding()
+                val listBottom = bottomInset + if (selected != null) 90.dp else 10.dp
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(
+                            start = padding.calculateStartPadding(layoutDirection),
+                            top = padding.calculateTopPadding(),
+                            end = padding.calculateEndPadding(layoutDirection)
+                        )
+                        .padding(horizontal = 18.dp)
+                ) {
                     Spacer(Modifier.height(8.dp))
                     AppHeader(accent, themeName) { tab = 3 }
                     Spacer(Modifier.height(12.dp))
                     Box(Modifier.weight(1f).fillMaxWidth()) {
-                        when (tab) {
-                            0 -> LazyColumn(
-                                Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                contentPadding = PaddingValues(bottom = 8.dp)
-                            ) {
-                                item { HomeHero(accent, importAll) }
-                                if (!mediaAccess) item { PermissionCard(accent, mediaDenied, requestAccess) }
-                                item {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        StatCard("FILES", libraryTracks.size.toString(), Modifier.weight(1f), accent)
-                                        StatCard("AUDIO", libraryTracks.count { !isVideo(it) }.toString(), Modifier.weight(1f), accent)
-                                        StatCard("VIDEO", libraryTracks.count { isVideo(it) }.toString(), Modifier.weight(1f), accent)
-                                    }
-                                }
-                                item {
-                                    SectionHeader(
-                                        "YOUR LIBRARY",
-                                        when {
-                                            scanning -> "Scanning your device…"
-                                            libraryTracks.isEmpty() -> "Allow access or import files to begin"
-                                            else -> "${libraryTracks.size} item(s) ready to play"
-                                        },
-                                        accent, importAll, rescan
-                                    )
-                                }
-                                item { SearchBox(query, { query = it }, accent) }
-                                if (visibleTracks.isEmpty() && !scanning) item { EmptyState(accent) }
-                                items(visibleTracks, key = { it.uri }) { track ->
-                                    TrackRow(track, track == selected, snap.isPlaying, accent,
-                                        onPick = { pick(track, visibleTracks) }, onRemove = { removeTrack(track) })
-                                }
-                            }
-                            1, 2 -> {
-                                val videoTab = tab == 2
-                                val filtered = libraryTracks.filter { isVideo(it) == videoTab && it.name.contains(query, true) }
-                                LazyColumn(
+                        Box(Modifier.fillMaxSize().glassSource(backdrop)) {
+                            when (tab) {
+                                0 -> LazyColumn(
                                     Modifier.fillMaxSize(),
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = PaddingValues(bottom = 8.dp)
+                                    contentPadding = PaddingValues(bottom = listBottom)
                                 ) {
+                                    item { HomeHero(accent, importAll) }
+                                    if (!mediaAccess) item { PermissionCard(accent, mediaDenied, requestAccess) }
                                     item {
-                                        LibraryHeader(
-                                            title = if (videoTab) "VIDEO LIBRARY" else "AUDIO LIBRARY",
-                                            subtitle = if (scanning) "Scanning your device…"
-                                            else if (videoTab) "Your clips, films and saved videos" else "Your music, podcasts and audio files",
-                                            count = filtered.size,
-                                            video = videoTab,
-                                            accent = accent,
-                                            onImport = { picker.launch(arrayOf(if (videoTab) "video/*" else "audio/*")) },
-                                            onRefresh = rescan
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            StatCard("FILES", libraryTracks.size.toString(), Modifier.weight(1f), accent)
+                                            StatCard("AUDIO", libraryTracks.count { !isVideo(it) }.toString(), Modifier.weight(1f), accent)
+                                            StatCard("VIDEO", libraryTracks.count { isVideo(it) }.toString(), Modifier.weight(1f), accent)
+                                        }
+                                    }
+                                    item {
+                                        SectionHeader(
+                                            "YOUR LIBRARY",
+                                            when {
+                                                scanning -> "Scanning your device…"
+                                                libraryTracks.isEmpty() -> "Allow access or import files to begin"
+                                                else -> "${libraryTracks.size} item(s) ready to play"
+                                            },
+                                            accent, importAll, rescan
                                         )
                                     }
-                                    if (!mediaAccess) item { PermissionCard(accent, mediaDenied, requestAccess) }
                                     item { SearchBox(query, { query = it }, accent) }
-                                    if (filtered.isEmpty() && !scanning) item { EmptyState(accent) }
-                                    items(filtered, key = { it.uri }) { track ->
+                                    if (visibleTracks.isEmpty() && !scanning) item { EmptyState(accent) }
+                                    items(visibleTracks, key = { it.uri }) { track ->
                                         TrackRow(track, track == selected, snap.isPlaying, accent,
-                                            onPick = { pick(track, filtered) }, onRemove = { removeTrack(track) })
+                                            onPick = { pick(track, visibleTracks) }, onRemove = { removeTrack(track) })
                                     }
                                 }
-                            }
-                            else -> Column(
-                                Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                StudioHeader(accent, themeName)
-                                Text("ACCENT THEMES", fontFamily = DisplayFont, fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp, letterSpacing = 0.8.sp)
-                                Text("Choose a look that feels like yours.", color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
-                                NkPalettes.forEach { p ->
-                                    ThemeOptionCard(p, themeName == p.name) { themeName = p.name }
+                                1, 2 -> {
+                                    val videoTab = tab == 2
+                                    val filtered = libraryTracks.filter { isVideo(it) == videoTab && it.name.contains(query, true) }
+                                    LazyColumn(
+                                        Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        contentPadding = PaddingValues(bottom = listBottom)
+                                    ) {
+                                        item {
+                                            LibraryHeader(
+                                                title = if (videoTab) "VIDEO LIBRARY" else "AUDIO LIBRARY",
+                                                subtitle = if (scanning) "Scanning your device…"
+                                                else if (videoTab) "Your clips, films and saved videos" else "Your music, podcasts and audio files",
+                                                count = filtered.size,
+                                                video = videoTab,
+                                                accent = accent,
+                                                onImport = { picker.launch(arrayOf(if (videoTab) "video/*" else "audio/*")) },
+                                                onRefresh = rescan
+                                            )
+                                        }
+                                        if (!mediaAccess) item { PermissionCard(accent, mediaDenied, requestAccess) }
+                                        item { SearchBox(query, { query = it }, accent) }
+                                        if (filtered.isEmpty() && !scanning) item { EmptyState(accent) }
+                                        items(filtered, key = { it.uri }) { track ->
+                                            TrackRow(track, track == selected, snap.isPlaying, accent,
+                                                onPick = { pick(track, filtered) }, onRemove = { removeTrack(track) })
+                                        }
+                                    }
                                 }
-                                Spacer(Modifier.height(4.dp))
-                                Text("SOUND", fontFamily = DisplayFont, fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp, letterSpacing = 0.8.sp)
-                                Text("Equalizer, bass boost and virtualizer for all playback.",
-                                    color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
-                                EqualizerSection(player = player, accent = accent)
-                                Spacer(Modifier.height(12.dp))
+                                else -> Column(
+                                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    StudioHeader(accent, themeName)
+                                    Text("ACCENT THEMES", fontFamily = DisplayFont, fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp, letterSpacing = 0.8.sp)
+                                    Text("Choose a look that feels like yours.", color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
+                                    NkPalettes.forEach { p ->
+                                        ThemeOptionCard(p, themeName == p.name) { themeName = p.name }
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    Text("SOUND", fontFamily = DisplayFont, fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp, letterSpacing = 0.8.sp)
+                                    Text("Equalizer, bass boost and virtualizer for all playback.",
+                                        color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
+                                    EqualizerSection(player = player, accent = accent)
+                                    Spacer(Modifier.height(listBottom))
+                                }
                             }
                         }
+                        selected?.let { track ->
+                            MiniPlayer(
+                                track, snap, accent,
+                                onOpen = { nowPlayingOpen = true },
+                                onToggle = { if (snap.isPlaying) player.pause() else player.play() },
+                                onNext = { player.seekToNextMediaItem() },
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = bottomInset + 4.dp)
+                            )
+                        }
                     }
-                    selected?.let { track ->
-                        Spacer(Modifier.height(8.dp))
-                        MiniPlayer(
-                            track, snap, accent,
-                            onOpen = { nowPlayingOpen = true },
-                            onToggle = { if (snap.isPlaying) player.pause() else player.play() },
-                            onNext = { player.seekToNextMediaItem() }
-                        )
-                    }
-                    Spacer(Modifier.height(2.dp))
                 }
             }
             AnimatedVisibility(
@@ -850,10 +869,12 @@ private fun MiniPlayer(
     accent: Color,
     onOpen: () -> Unit,
     onToggle: () -> Unit,
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val video = isVideo(track)
-    GlassCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), strength = 1.4f, onClick = onOpen) {
+    // blur = true: the list scrolling underneath is blurred through the glass (Android 12+).
+    GlassCard(modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), strength = 1.4f, blur = true, onClick = onOpen) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             MediaArt(
                 uri = track.uri,
