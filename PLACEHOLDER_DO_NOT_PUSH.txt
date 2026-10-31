@@ -1,0 +1,148 @@
+@file:OptIn(ExperimentalTextApi::class)
+
+package com.nkplayer.app
+
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.os.Build
+import android.util.LruCache
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.media3.common.Player
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
+
+// ---------------------------------------------------------------------------------------------
+// Fonts: Unbounded (display) + Manrope (text). Downloaded into res/font by the fetchFonts task.
+// ---------------------------------------------------------------------------------------------
+
+private fun nkFamily(resId: Int): FontFamily = FontFamily(
+    listOf(400, 500, 600, 700, 800).map { w ->
+        Font(resId, FontWeight(w), variationSettings = FontVariation.Settings(FontVariation.weight(w)))
+    }
+)
+
+val DisplayFont: FontFamily = nkFamily(R.font.unbounded)
+val BodyFont: FontFamily = nkFamily(R.font.manrope)
+
+private fun TextStyle.on(family: FontFamily): TextStyle = copy(fontFamily = family)
+
+val NkTypography: Typography = Typography().let { t ->
+    t.copy(
+        displayLarge = t.displayLarge.on(DisplayFont),
+        displayMedium = t.displayMedium.on(DisplayFont),
+        displaySmall = t.displaySmall.on(DisplayFont),
+        headlineLarge = t.headlineLarge.on(DisplayFont),
+        headlineMedium = t.headlineMedium.on(DisplayFont),
+        headlineSmall = t.headlineSmall.on(DisplayFont),
+        titleLarge = t.titleLarge.on(DisplayFont),
+        titleMedium = t.titleMedium.on(BodyFont),
+        titleSmall = t.titleSmall.on(BodyFont),
+        bodyLarge = t.bodyLarge.on(BodyFont),
+        bodyMedium = t.bodyMedium.on(BodyFont),
+        bodySmall = t.bodySmall.on(BodyFont),
+        labelLarge = t.labelLarge.on(BodyFont),
+        labelMedium = t.labelMedium.on(BodyFont),
+        labelSmall = t.labelSmall.on(BodyFont)
+    )
+}
+
+// ---------------------------------------------------------------------------------------------
+// Palettes (names are persisted by LibraryStore, so keep them stable)
+// ---------------------------------------------------------------------------------------------
+
+data class NkPalette(
+    val name: String,
+    val accent: Color,
+    val bgTop: Color,
+    val bgMid: Color,
+    val bgBottom: Color
+)
+
+val NkPalettes = listOf(
+    NkPalette("Neon Blue", Color(0xFF48E5FF), Color(0xFF14307A), Color(0xFF0B1646), Color(0xFF050818)),
+    NkPalette("Cyber Purple", Color(0xFFB794FF), Color(0xFF3A1C8F), Color(0xFF1D0F52), Color(0xFF08051E)),
+    NkPalette("Emerald Green", Color(0xFF37E6A4), Color(0xFF0E4D55), Color(0xFF082F3B), Color(0xFF030E14)),
+    NkPalette("Crimson Red", Color(0xFFFF5470), Color(0xFF6B1238), Color(0xFF3A0B2A), Color(0xFF12050E)),
+    NkPalette("Golden Amber", Color(0xFFFFC45C), Color(0xFF6B3A12), Color(0xFF3A1F1 8), Color(0xFF120A06))
+)
+
+fun paletteFor(name: String): NkPalette = NkPalettes.firstOrNull { it.name == name } ?: NkPalettes.first()
+
+@Composable
+fun NkTheme(palette: NkPalette, content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = palette.accent,
+            onPrimary = Color(0xFF07101C),
+            secondary = palette.accent,
+            background = palette.bgBottom,
+            surface = Color(0xFF1A1245),
+            onSurface = Color.White,
+            onBackground = Color.White
+        ),
+        typography = NkTypography
+    ) {
+        CompositionLocalProvider(LocalContentColor provides Color.White) { content() }
+    }
+}
