@@ -10,8 +10,8 @@ import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** One audio or video file found on the device through MediaStore. */
-data class DeviceItem(val uri: String, val name: String, val mimeType: String?, val video: Boolean)
+/** One audio or video file found on the device through MediaStore. [added] is MediaStore DATE_ADDED (seconds). */
+data class DeviceItem(val uri: String, val name: String, val mimeType: String?, val video: Boolean, val added: Long = 0L)
 
 /**
  * Finds every audio and video file on the phone via MediaStore. This only needs the media
@@ -40,7 +40,8 @@ object DeviceMedia {
         val projection = arrayOf(
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.DISPLAY_NAME,
-            MediaStore.MediaColumns.MIME_TYPE
+            MediaStore.MediaColumns.MIME_TYPE,
+            MediaStore.MediaColumns.DATE_ADDED
         )
         // Skip ringtones, notification sounds, alarms and clips shorter than 10 seconds.
         val selection = if (video) null else {
@@ -52,13 +53,15 @@ object DeviceMedia {
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
             val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
             val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
+            val addedColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
                 items += DeviceItem(
                     uri = ContentUris.withAppendedId(collection, id).toString(),
                     name = cursor.getString(nameColumn)?.takeIf { it.isNotBlank() } ?: "Media file",
                     mimeType = cursor.getString(mimeColumn),
-                    video = video
+                    video = video,
+                    added = cursor.getLong(addedColumn)
                 )
             }
         }
