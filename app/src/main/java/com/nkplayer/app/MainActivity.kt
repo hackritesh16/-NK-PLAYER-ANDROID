@@ -71,6 +71,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 private val InkButton = Color(0xFF07101C)
 private val DialogGlass = Color(0xFF1A1245)
@@ -85,6 +86,10 @@ private data class Track(
 ) {
     fun saved() = SavedTrack(uri, name, mimeType)
 }
+
+private fun Track.toStored(): StoredItem = StoredItem(uri, name, mimeType, isVideo(this))
+
+private fun StoredItem.toTrack(): Track = Track(uri, name, mimeType, video)
 
 class MainActivity : ComponentActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -202,12 +207,24 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     var subtitleDialog by remember { mutableStateOf(false) }
     var externalSubtitleName by remember { mutableStateOf<String?>(null) }
     var playbackError by remember { mutableStateOf<String?>(null) }
+    // Home dashboard data (last played with resume position, history, favourites, playlists, newest files).
+    var lastPlayed by remember { mutableStateOf<StoredItem?>(null) }
+    var history by remember { mutableStateOf(emptyList<StoredItem>()) }
+    var favorites by remember { mutableStateOf(emptyList<StoredItem>()) }
+    var playlists by remember { mutableStateOf(emptyList<NkPlaylist>()) }
+    var recentItems by remember { mutableStateOf(emptyList<StoredItem>()) }
+    var activityKind by remember { mutableStateOf<ActivityKind?>(null) }
+    var openPlaylistId by remember { mutableStateOf<String?>(null) }
+    var scrollToSound by remember { mutableStateOf(false) }
+    var playlistTarget by remember { mutableStateOf<StoredItem?>(null) }
+    var newPlaylistDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snap = rememberPlaybackSnapshot(player)
 
     // Manually imported files (persisted) plus everything found on the device (re-scanned each time).
     val libraryTracks = remember(tracks, deviceTracks) { (tracks + deviceTracks).distinctBy { it.uri } }
+    val audioCount = remember(libraryTracks) { libraryTracks.count { !isVideo(it) } }
     var mediaAccess by remember { mutableStateOf(DeviceMedia.hasPermission(context)) }
     var mediaDenied by remember { mutableStateOf(false) }
     var scanning by remember { mutableStateOf(false) }
@@ -219,6 +236,8 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             scope.launch {
                 val found = runCatching { DeviceMedia.scan(context) }.getOrDefault(emptyList())
                 deviceTracks = found.map { Track(it.uri, it.name, it.mimeType, it.video, true) }
+                recentItems = found.sortedByDescending { it.added }.take(30)
+                    .map { StoredItem(it.uri, it.name, it.mimeType, it.video) }
                 scanning = false
             }
         }
@@ -229,6 +248,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val currentUri = mediaItem?.localConfiguration?.uri?.toString()
                 selected = libraryTracks.firstOrNull { it.uri == currentUri }
+                    ?: selected?.takeIf { it.uri == currentUri }
                 playbackError = null
             }
             override fun onPlayerError(error: PlaybackException) {
@@ -321,12 +341,54 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
             Track(saved.uri, saved.name, mimeType)
         }
         themeName = runCatching { store.loadTheme() }.getOrDefault("Neon Blue")
+        history = runCatching { store.loadHistory() }.getOrDefault(emptyList())
+        favorites = runCatching { store.loadFavorites() }.getOrDefault(emptyList())
+        playlists = runCatching { store.loadPlaylists() }.getOrDefault(emptyList())
+        lastPlayed = runCatching { store.loadLastPlayed() }.getOrNull()
         libraryLoaded = true
     }
     LaunchedEffect(tracks, libraryLoaded) {
         if (libraryLoaded) runCatching { store.saveLibrary(tracks.map { it.saved() }) }
     }
     LaunchedEffect(themeName) { runCatching { store.saveTheme(themeName) } }
+    LaunchedEffect(history, libraryLoaded) {
+        if (libraryLoaded) runCatching { store.saveHistory(history) }
+    }
+    LaunchedEffect(favorites, libraryLoaded) {
+        if (libraryLoaded) runCatching { store.saveFavorites(favorites) }
+    }
+    LaunchedEffect(playlists, libraryLoaded) {
+        if (libraryLoaded) runCatching { store.savePlaylists(playlists) }
+    }
+    LaunchedEffect(lastPlayed, libraryLoaded) {
+        val last = lastPlayed
+        if (libraryLoaded && last != null) runCatching { store.saveLastPlayed(last) }
+    }
+
+    // Whatever starts playing goes into history and becomes "Continue Playing"; the resume position
+    // is refreshed every few seconds while it plays.
+    LaunchedEffect(selected?.uri) {
+        val current = selected ?: return@LaunchedEffect
+        val now = System.currentTimeMillis()
+        val base = current.toStored()
+        val previous = lastPlayed?.takeIf { it.uri == base.uri }
+        history = (listOf(base.copy(at = now)) + history.filterNot { it.uri == base.uri }).take(100)
+        lastPlayed = base.copy(
+            positionMs = previous?.positionMs ?: 0L,
+            durationMs = previous?.durationMs ?: 0L,
+            at = now
+        )
+        while (true) {
+            delay(5000)
+            if (player.currentMediaItem?.localConfiguration?.uri?.toString() == current.uri) {
+                lastPlayed = base.copy(
+                    positionMs = player.currentPosition.coerceAtLeast(0L),
+                    durationMs = player.duration.takeIf { it > 0L } ?: 0L,
+                    at = now
+                )
+            }
+        }
+    }
 
     val palette = paletteFor(themeName)
     val accent = palette.accent
@@ -371,7 +433,6 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     }
 
     val importAll = { picker.launch(arrayOf("audio/*", "video/*")) }
-    val visibleTracks = libraryTracks.filter { it.name.contains(query, true) }
     val pick: (Track, List<Track>) -> Unit = { track, queue ->
         playbackError = null
         playTrack(track, queue, player)
@@ -379,7 +440,59 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
         if (isVideo(track)) nowPlayingOpen = true
     }
 
+    // ---- Home dashboard actions -------------------------------------------------------------
+    val favoriteUris = favorites.map { it.uri }.toSet()
+    val toggleFavorite: (StoredItem) -> Unit = { item ->
+        favorites = if (item.uri in favoriteUris) {
+            favorites.filterNot { it.uri == item.uri }
+        } else {
+            listOf(item.copy(positionMs = 0L, durationMs = 0L)) + favorites
+        }
+    }
+    val createPlaylist: (String, StoredItem?) -> Unit = { name, first ->
+        val clean = name.trim()
+        if (clean.isNotEmpty()) {
+            playlists = playlists + NkPlaylist(UUID.randomUUID().toString(), clean.take(40), listOfNotNull(first))
+        }
+    }
+    val addToPlaylist: (String, StoredItem) -> Unit = { id, item ->
+        playlists = playlists.map { p ->
+            if (p.id == id && p.tracks.none { it.uri == item.uri }) p.copy(tracks = p.tracks + item) else p
+        }
+    }
+    val playStored: (StoredItem, List<StoredItem>) -> Unit = { item, queue ->
+        val track = libraryTracks.firstOrNull { it.uri == item.uri } ?: item.toTrack()
+        val trackQueue = queue.map { s -> libraryTracks.firstOrNull { it.uri == s.uri } ?: s.toTrack() }
+        pick(track, trackQueue)
+    }
+    val resume: () -> Unit = {
+        val last = lastPlayed
+        if (last != null) {
+            val current = selected
+            if (current != null && current.uri == last.uri && player.mediaItemCount > 0) {
+                if (snap.isPlaying) {
+                    player.pause()
+                } else {
+                    player.play()
+                    if (isVideo(current)) nowPlayingOpen = true
+                }
+            } else {
+                val track = libraryTracks.firstOrNull { it.uri == last.uri } ?: last.toTrack()
+                val sameKind = libraryTracks.filter { isVideo(it) == isVideo(track) }
+                val queue = if (sameKind.any { it.uri == track.uri }) sameKind else listOf(track)
+                val finished = last.durationMs > 0L && last.positionMs >= last.durationMs - 3000L
+                playbackError = null
+                playTrack(track, queue, player, if (finished) 0L else last.positionMs)
+                selected = track
+                if (isVideo(track)) nowPlayingOpen = true
+            }
+        }
+    }
+
     BackHandler(enabled = nowPlayingOpen && !fullScreenVideo) { nowPlayingOpen = false }
+    BackHandler(enabled = tab == 0 && activityKind != null && !nowPlayingOpen && !fullScreenVideo) {
+        if (openPlaylistId != null) openPlaylistId = null else activityKind = null
+    }
 
     NkTheme(palette) {
         GlassBackground(palette) {
@@ -395,7 +508,13 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                             NKNavItem("Studio", Icons.Default.Tune)
                         ),
                         selectedIndex = tab,
-                        onSelect = { tab = it },
+                        onSelect = {
+                            if (it == 0) {
+                                activityKind = null
+                                openPlaylistId = null
+                            }
+                            tab = it
+                        },
                         accent = accent,
                         modifier = Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp)
                     )
@@ -407,36 +526,111 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                     Spacer(Modifier.height(12.dp))
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         when (tab) {
-                            0 -> LazyColumn(
-                                Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                contentPadding = PaddingValues(bottom = 8.dp)
-                            ) {
-                                item { HomeHero(accent, importAll) }
-                                if (!mediaAccess) item { PermissionCard(accent, mediaDenied, requestAccess) }
-                                item {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        StatCard("FILES", libraryTracks.size.toString(), Modifier.weight(1f), accent)
-                                        StatCard("AUDIO", libraryTracks.count { !isVideo(it) }.toString(), Modifier.weight(1f), accent)
-                                        StatCard("VIDEO", libraryTracks.count { isVideo(it) }.toString(), Modifier.weight(1f), accent)
-                                    }
-                                }
-                                item {
-                                    SectionHeader(
-                                        "YOUR LIBRARY",
-                                        when {
-                                            scanning -> "Scanning your device…"
-                                            libraryTracks.isEmpty() -> "Allow access or import files to begin"
-                                            else -> "${libraryTracks.size} item(s) ready to play"
+                            0 -> {
+                                val kind = activityKind
+                                if (kind != null) {
+                                    ActivityPane(
+                                        kind = kind,
+                                        accent = accent,
+                                        items = when (kind) {
+                                            ActivityKind.History -> history
+                                            ActivityKind.Favorites -> favorites
+                                            ActivityKind.Recent -> recentItems
+                                            ActivityKind.Playlists -> emptyList()
                                         },
-                                        accent, importAll, rescan
+                                        playlists = playlists,
+                                        openPlaylist = playlists.firstOrNull { it.id == openPlaylistId },
+                                        currentUri = selected?.uri,
+                                        playing = snap.isPlaying,
+                                        favoriteUris = favoriteUris,
+                                        hasMediaAccess = mediaAccess,
+                                        onBack = { if (openPlaylistId != null) openPlaylistId = null else activityKind = null },
+                                        onPlay = playStored,
+                                        onToggleFavorite = toggleFavorite,
+                                        onClearHistory = { history = emptyList() },
+                                        onOpenPlaylist = { openPlaylistId = it },
+                                        onNewPlaylist = { newPlaylistDialog = true },
+                                        onDeletePlaylist = { p ->
+                                            playlists = playlists.filterNot { it.id == p.id }
+                                            openPlaylistId = null
+                                        },
+                                        onRemoveFromPlaylist = { p, item ->
+                                            playlists = playlists.map { pl ->
+                                                if (pl.id == p.id) pl.copy(tracks = pl.tracks.filterNot { it.uri == item.uri }) else pl
+                                            }
+                                        },
+                                        onRequestAccess = requestAccess
                                     )
-                                }
-                                item { SearchBox(query, { query = it }, accent) }
-                                if (visibleTracks.isEmpty() && !scanning) item { EmptyState(accent) }
-                                items(visibleTracks, key = { it.uri }) { track ->
-                                    TrackRow(track, track == selected, snap.isPlaying, accent,
-                                        onPick = { pick(track, visibleTracks) }, onRemove = { removeTrack(track) })
+                                } else {
+                                    LazyColumn(
+                                        Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                                        contentPadding = PaddingValues(bottom = 8.dp)
+                                    ) {
+                                        item {
+                                            DashFadeIn(0) {
+                                                WelcomeHeader(
+                                                    accent = accent,
+                                                    summary = when {
+                                                        scanning -> "Scanning your device…"
+                                                        libraryTracks.isEmpty() -> "Allow access or add files to begin"
+                                                        else -> "${libraryTracks.size} files  •  $audioCount audio  •  ${libraryTracks.size - audioCount} video"
+                                                    },
+                                                    onImport = importAll
+                                                )
+                                            }
+                                        }
+                                        if (!mediaAccess) item { PermissionCard(accent, mediaDenied, requestAccess) }
+                                        item {
+                                            val last = lastPlayed
+                                            val live = last != null && selected?.uri == last.uri
+                                            DashFadeIn(90) {
+                                                ContinuePlayingCard(
+                                                    item = last,
+                                                    accent = accent,
+                                                    positionMs = if (live) snap.positionMs else last?.positionMs ?: 0L,
+                                                    durationMs = if (live && snap.durationMs > 0L) snap.durationMs else last?.durationMs ?: 0L,
+                                                    playing = live && snap.isPlaying,
+                                                    onResume = resume,
+                                                    onBrowseAudio = { tab = 1 },
+                                                    onBrowseVideo = { tab = 2 }
+                                                )
+                                            }
+                                        }
+                                        item {
+                                            DashFadeIn(180) {
+                                                YourActivitySection(
+                                                    historyCount = history.size,
+                                                    favoritesCount = favorites.size,
+                                                    playlistCount = playlists.size,
+                                                    recentCount = recentItems.size,
+                                                    hasMediaAccess = mediaAccess,
+                                                    accent = accent,
+                                                    onOpen = {
+                                                        openPlaylistId = null
+                                                        activityKind = it
+                                                    }
+                                                )
+                                            }
+                                        }
+                                        item {
+                                            DashFadeIn(270) {
+                                                QuickSettingsSection(
+                                                    accent = accent,
+                                                    sleepLabel = sleepLabel,
+                                                    speedLabel = formatSpeed(snap.speed),
+                                                    speedActive = snap.speed != 1f,
+                                                    onEqualizer = {
+                                                        scrollToSound = true
+                                                        tab = 3
+                                                    },
+                                                    onSleep = cycleSleep,
+                                                    onSpeed = cycleSpeed,
+                                                    onSettings = { tab = 3 }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             1, 2 -> {
@@ -468,24 +662,34 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                     }
                                 }
                             }
-                            else -> Column(
-                                Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                StudioHeader(accent, themeName)
-                                Text("ACCENT THEMES", fontFamily = DisplayFont, fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp, letterSpacing = 0.8.sp)
-                                Text("Choose a look that feels like yours.", color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
-                                NkPalettes.forEach { p ->
-                                    ThemeOptionCard(p, themeName == p.name) { themeName = p.name }
+                            else -> {
+                                val studioScroll = rememberScrollState()
+                                LaunchedEffect(scrollToSound) {
+                                    if (scrollToSound) {
+                                        delay(150)
+                                        studioScroll.animateScrollTo(studioScroll.maxValue)
+                                        scrollToSound = false
+                                    }
                                 }
-                                Spacer(Modifier.height(4.dp))
-                                Text("SOUND", fontFamily = DisplayFont, fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp, letterSpacing = 0.8.sp)
-                                Text("Equalizer, bass boost and virtualizer for all playback.",
-                                    color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
-                                EqualizerSection(player = player, accent = accent)
-                                Spacer(Modifier.height(12.dp))
+                                Column(
+                                    Modifier.fillMaxSize().verticalScroll(studioScroll),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    StudioHeader(accent, themeName)
+                                    Text("ACCENT THEMES", fontFamily = DisplayFont, fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp, letterSpacing = 0.8.sp)
+                                    Text("Choose a look that feels like yours.", color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
+                                    NkPalettes.forEach { p ->
+                                        ThemeOptionCard(p, themeName == p.name) { themeName = p.name }
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    Text("SOUND", fontFamily = DisplayFont, fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp, letterSpacing = 0.8.sp)
+                                    Text("Equalizer, bass boost and virtualizer for all playback.",
+                                        color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
+                                    EqualizerSection(player = player, accent = accent)
+                                    Spacer(Modifier.height(12.dp))
+                                }
                             }
                         }
                     }
@@ -515,9 +719,12 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                         sleepLabel = sleepLabel,
                         subtitleName = externalSubtitleName,
                         showInlineVideo = !fullScreenVideo,
+                        favorite = track.uri in favoriteUris,
                         onClose = { nowPlayingOpen = false },
                         onSpeed = cycleSpeed,
                         onSleep = cycleSleep,
+                        onFavorite = { toggleFavorite(track.toStored()) },
+                        onAddToPlaylist = { playlistTarget = track.toStored() },
                         onSubtitles = { subtitleDialog = true },
                         onLoadSubtitle = { subtitlePicker.launch(arrayOf("*/*")) },
                         onFullscreen = { fullScreenVideo = true }
@@ -587,6 +794,33 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                 confirmButton = { TextButton(onClick = { playbackError = null }) { Text("OK", color = accent) } }
             )
         }
+        playlistTarget?.let { target ->
+            AddToPlaylistDialog(
+                playlists = playlists,
+                trackUri = target.uri,
+                trackName = target.name,
+                accent = accent,
+                onPick = { id ->
+                    addToPlaylist(id, target)
+                    playlistTarget = null
+                },
+                onCreate = { name ->
+                    createPlaylist(name, target)
+                    playlistTarget = null
+                },
+                onDismiss = { playlistTarget = null }
+            )
+        }
+        if (newPlaylistDialog) {
+            NewPlaylistDialog(
+                accent = accent,
+                onCreate = { name ->
+                    createPlaylist(name, null)
+                    newPlaylistDialog = false
+                },
+                onDismiss = { newPlaylistDialog = false }
+            )
+        }
         if (fullScreenVideo && selected?.let { isVideo(it) } == true) {
             NKFullScreenVideo(
                 player = player,
@@ -598,7 +832,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     }
 }
 
-private fun playTrack(track: Track, queue: List<Track>, player: Player) {
+private fun playTrack(track: Track, queue: List<Track>, player: Player, startPositionMs: Long = 0L) {
     val full = queue.ifEmpty { listOf(track) }
     val fullIndex = full.indexOfFirst { it.uri == track.uri }.coerceAtLeast(0)
     // With the whole device library listed, queue a window around the chosen item instead of thousands.
@@ -610,7 +844,7 @@ private fun playTrack(track: Track, queue: List<Track>, player: Player) {
             item.mimeType?.let { setMimeType(it) }
         }.build()
     }
-    player.setMediaItems(mediaItems, startIndex, 0L)
+    player.setMediaItems(mediaItems, startIndex, startPositionMs)
     player.prepare()
     player.play()
 }
@@ -650,23 +884,6 @@ private fun AppHeader(accent: Color, themeName: String, onStudio: () -> Unit) {
 }
 
 @Composable
-private fun HomeHero(accent: Color, onImport: () -> Unit) {
-    GlassCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(30.dp), strength = 1.2f) {
-        Column(Modifier.padding(22.dp)) {
-            GlassChip("YOUR MEDIA. YOUR RULES.", accent, active = true, icon = Icons.Default.GraphicEq)
-            Spacer(Modifier.height(18.dp))
-            Text("Press play.\nFeel the difference.", fontFamily = DisplayFont, fontWeight = FontWeight.ExtraBold,
-                fontSize = 26.sp, lineHeight = 32.sp)
-            Spacer(Modifier.height(8.dp))
-            Text("Audio and video in one glass-smooth player. Your phone's music and videos appear here automatically.",
-                color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, lineHeight = 19.sp)
-            Spacer(Modifier.height(18.dp))
-            AccentButton("ADD FILES MANUALLY", Icons.Default.Add, accent, Modifier.fillMaxWidth(), onImport)
-        }
-    }
-}
-
-@Composable
 private fun PermissionCard(accent: Color, denied: Boolean, onAllow: () -> Unit) {
     GlassCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), strength = 1.3f) {
         Column(Modifier.padding(20.dp)) {
@@ -695,32 +912,6 @@ private fun PermissionCard(accent: Color, denied: Boolean, onAllow: () -> Unit) 
                 Icons.Default.Search, accent, Modifier.fillMaxWidth(), onAllow
             )
         }
-    }
-}
-
-@Composable
-private fun StatCard(label: String, value: String, modifier: Modifier, accent: Color) {
-    GlassCard(modifier, shape = RoundedCornerShape(20.dp)) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(label, color = Color.White.copy(alpha = 0.65f), fontSize = 10.sp, letterSpacing = 1.sp,
-                fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Spacer(Modifier.height(4.dp))
-            Text(value, color = accent, fontFamily = DisplayFont, fontWeight = FontWeight.ExtraBold,
-                fontSize = 20.sp, maxLines = 1)
-        }
-    }
-}
-
-@Composable
-private fun SectionHeader(title: String, subtitle: String, accent: Color, onAdd: () -> Unit, onRefresh: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, letterSpacing = 0.8.sp)
-            Text(subtitle, color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
-        }
-        GlassIconButton(Icons.Default.Refresh, "Rescan device", onRefresh, tint = accent)
-        Spacer(Modifier.width(8.dp))
-        GlassIconButton(Icons.Default.Add, "Import media", onAdd, tint = accent)
     }
 }
 
@@ -897,9 +1088,12 @@ private fun NowPlayingScreen(
     sleepLabel: String?,
     subtitleName: String?,
     showInlineVideo: Boolean,
+    favorite: Boolean,
     onClose: () -> Unit,
     onSpeed: () -> Unit,
     onSleep: () -> Unit,
+    onFavorite: () -> Unit,
+    onAddToPlaylist: () -> Unit,
     onSubtitles: () -> Unit,
     onLoadSubtitle: () -> Unit,
     onFullscreen: () -> Unit
@@ -1024,6 +1218,12 @@ private fun NowPlayingScreen(
             }
             Spacer(Modifier.height(16.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassChip(
+                    "Favorite", accent, active = favorite,
+                    icon = if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    onClick = onFavorite
+                )
+                GlassChip("Playlist", accent, icon = Icons.Default.QueueMusic, onClick = onAddToPlaylist)
                 GlassChip(formatSpeed(snap.speed), accent, active = snap.speed != 1f, icon = Icons.Default.Speed, onClick = onSpeed)
                 GlassChip(sleepLabel ?: "Sleep", accent, active = sleepLabel != null, icon = Icons.Default.Bedtime, onClick = onSleep)
                 if (video) {
