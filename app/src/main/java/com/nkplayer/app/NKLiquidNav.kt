@@ -70,7 +70,8 @@ data class NKNavItem(val label: String, val icon: ImageVector)
 /**
  * Floating liquid-glass bottom navigation.
  *
- * - Glass pill with a gradient rim and a soft light sheen.
+ * - Glass pill with real backdrop blur (Android 12+; darker translucent fallback below), a gradient
+ *   rim and a soft light sheen. Page content scrolls underneath and shows through, blurred.
  * - A liquid blob marks the active tab. Touch the bar and the blob swells and follows the finger;
  *   a slower "tail" lags behind, so the blob stretches, pinches in the middle and snaps back like a
  *   water droplet. On release it settles on the nearest tab with a little wobble.
@@ -149,7 +150,7 @@ fun NKLiquidNavBar(
                 spotColor = Color.Black
             )
             .clip(barShape)
-            .background(Color(0xCC0B1220))
+            .glassBlurFill(tint = Color(0x8C0B1220), fallback = Color(0xCC0B1220))
             .background(
                 Brush.verticalGradient(
                     listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.04f))
