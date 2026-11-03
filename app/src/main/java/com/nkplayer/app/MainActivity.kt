@@ -69,6 +69,8 @@ import androidx.media3.session.SessionToken
 import androidx.media3.ui.PlayerView
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -218,6 +220,8 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
     var scrollToSound by remember { mutableStateOf(false) }
     var playlistTarget by remember { mutableStateOf<StoredItem?>(null) }
     var newPlaylistDialog by remember { mutableStateOf(false) }
+    // Content that scrolls behind the floating bars is the "source" of their real background blur.
+    val hazeState = remember { HazeState() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snap = rememberPlaybackSnapshot(player)
@@ -500,27 +504,49 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                 containerColor = Color.Transparent,
                 contentColor = Color.White,
                 bottomBar = {
-                    NKLiquidNavBar(
-                        items = listOf(
-                            NKNavItem("Home", Icons.Default.Home),
-                            NKNavItem("Audio", Icons.Default.MusicNote),
-                            NKNavItem("Video", Icons.Default.VideoLibrary),
-                            NKNavItem("Studio", Icons.Default.Tune)
-                        ),
-                        selectedIndex = tab,
-                        onSelect = {
-                            if (it == 0) {
-                                activityKind = null
-                                openPlaylistId = null
+                    // Everything here floats above the scrolling content, so it gets the real blur.
+                    CompositionLocalProvider(LocalHazeState provides hazeState) {
+                        Column {
+                            selected?.let { track ->
+                                Box(Modifier.padding(horizontal = 18.dp).padding(top = 6.dp)) {
+                                    MiniPlayer(
+                                        track, snap, accent,
+                                        onOpen = { nowPlayingOpen = true },
+                                        onToggle = { if (snap.isPlaying) player.pause() else player.play() },
+                                        onNext = { player.seekToNextMediaItem() }
+                                    )
+                                }
                             }
-                            tab = it
-                        },
-                        accent = accent,
-                        modifier = Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp)
-                    )
+                            NKLiquidNavBar(
+                                items = listOf(
+                                    NKNavItem("Home", Icons.Default.Home),
+                                    NKNavItem("Audio", Icons.Default.MusicNote),
+                                    NKNavItem("Video", Icons.Default.VideoLibrary),
+                                    NKNavItem("Studio", Icons.Default.Tune)
+                                ),
+                                selectedIndex = tab,
+                                onSelect = {
+                                    if (it == 0) {
+                                        activityKind = null
+                                        openPlaylistId = null
+                                    }
+                                    tab = it
+                                },
+                                accent = accent,
+                                modifier = Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp)
+                            )
+                        }
+                    }
                 }
             ) { padding ->
-                Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp)) {
+                // Content may scroll behind the floating bars; lists leave room for them at the end.
+                val bottomBarPad = padding.calculateBottomPadding()
+                Column(
+                    Modifier.fillMaxSize()
+                        .hazeSource(hazeState)
+                        .padding(top = padding.calculateTopPadding())
+                        .padding(horizontal = 18.dp)
+                ) {
                     Spacer(Modifier.height(8.dp))
                     AppHeader(accent, themeName) { tab = 3 }
                     Spacer(Modifier.height(12.dp))
@@ -529,43 +555,45 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                             0 -> {
                                 val kind = activityKind
                                 if (kind != null) {
-                                    ActivityPane(
-                                        kind = kind,
-                                        accent = accent,
-                                        items = when (kind) {
-                                            ActivityKind.History -> history
-                                            ActivityKind.Favorites -> favorites
-                                            ActivityKind.Recent -> recentItems
-                                            ActivityKind.Playlists -> emptyList()
-                                        },
-                                        playlists = playlists,
-                                        openPlaylist = playlists.firstOrNull { it.id == openPlaylistId },
-                                        currentUri = selected?.uri,
-                                        playing = snap.isPlaying,
-                                        favoriteUris = favoriteUris,
-                                        hasMediaAccess = mediaAccess,
-                                        onBack = { if (openPlaylistId != null) openPlaylistId = null else activityKind = null },
-                                        onPlay = playStored,
-                                        onToggleFavorite = toggleFavorite,
-                                        onClearHistory = { history = emptyList() },
-                                        onOpenPlaylist = { openPlaylistId = it },
-                                        onNewPlaylist = { newPlaylistDialog = true },
-                                        onDeletePlaylist = { p ->
-                                            playlists = playlists.filterNot { it.id == p.id }
-                                            openPlaylistId = null
-                                        },
-                                        onRemoveFromPlaylist = { p, item ->
-                                            playlists = playlists.map { pl ->
-                                                if (pl.id == p.id) pl.copy(tracks = pl.tracks.filterNot { it.uri == item.uri }) else pl
-                                            }
-                                        },
-                                        onRequestAccess = requestAccess
-                                    )
+                                    Box(Modifier.fillMaxSize().padding(bottom = bottomBarPad)) {
+                                        ActivityPane(
+                                            kind = kind,
+                                            accent = accent,
+                                            items = when (kind) {
+                                                ActivityKind.History -> history
+                                                ActivityKind.Favorites -> favorites
+                                                ActivityKind.Recent -> recentItems
+                                                ActivityKind.Playlists -> emptyList()
+                                            },
+                                            playlists = playlists,
+                                            openPlaylist = playlists.firstOrNull { it.id == openPlaylistId },
+                                            currentUri = selected?.uri,
+                                            playing = snap.isPlaying,
+                                            favoriteUris = favoriteUris,
+                                            hasMediaAccess = mediaAccess,
+                                            onBack = { if (openPlaylistId != null) openPlaylistId = null else activityKind = null },
+                                            onPlay = playStored,
+                                            onToggleFavorite = toggleFavorite,
+                                            onClearHistory = { history = emptyList() },
+                                            onOpenPlaylist = { openPlaylistId = it },
+                                            onNewPlaylist = { newPlaylistDialog = true },
+                                            onDeletePlaylist = { p ->
+                                                playlists = playlists.filterNot { it.id == p.id }
+                                                openPlaylistId = null
+                                            },
+                                            onRemoveFromPlaylist = { p, item ->
+                                                playlists = playlists.map { pl ->
+                                                    if (pl.id == p.id) pl.copy(tracks = pl.tracks.filterNot { it.uri == item.uri }) else pl
+                                                }
+                                            },
+                                            onRequestAccess = requestAccess
+                                        )
+                                    }
                                 } else {
                                     LazyColumn(
                                         Modifier.fillMaxSize(),
                                         verticalArrangement = Arrangement.spacedBy(16.dp),
-                                        contentPadding = PaddingValues(bottom = 8.dp)
+                                        contentPadding = PaddingValues(bottom = bottomBarPad + 8.dp)
                                     ) {
                                         item {
                                             DashFadeIn(0) {
@@ -639,7 +667,7 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                 LazyColumn(
                                     Modifier.fillMaxSize(),
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = PaddingValues(bottom = 8.dp)
+                                    contentPadding = PaddingValues(bottom = bottomBarPad + 8.dp)
                                 ) {
                                     item {
                                         LibraryHeader(
@@ -688,21 +716,11 @@ private fun NkPlayerApp(player: Player, store: LibraryStore, onPersistPermission
                                     Text("Equalizer, bass boost and virtualizer for all playback.",
                                         color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
                                     EqualizerSection(player = player, accent = accent)
-                                    Spacer(Modifier.height(12.dp))
+                                    Spacer(Modifier.height(bottomBarPad + 12.dp))
                                 }
                             }
                         }
                     }
-                    selected?.let { track ->
-                        Spacer(Modifier.height(8.dp))
-                        MiniPlayer(
-                            track, snap, accent,
-                            onOpen = { nowPlayingOpen = true },
-                            onToggle = { if (snap.isPlaying) player.pause() else player.play() },
-                            onNext = { player.seekToNextMediaItem() }
-                        )
-                    }
-                    Spacer(Modifier.height(2.dp))
                 }
             }
             AnimatedVisibility(
@@ -1105,138 +1123,144 @@ private fun NowPlayingScreen(
     var preview by remember { mutableFloatStateOf(0f) }
     val progress = if (seeking) preview
     else if (snap.durationMs > 0L) (snap.positionMs.toFloat() / snap.durationMs).coerceIn(0f, 1f) else 0f
+    val hazeState = remember { HazeState() }
 
     GlassBackground(palette) {
-        val backdrop = art
-        if (backdrop != null) {
-            Image(
-                bitmap = backdrop,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().blur(48.dp).alpha(if (Build.VERSION.SDK_INT >= 31) 0.55f else 0.25f)
-            )
-        }
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x66130B3A), Color(0xD9070A1E)))))
-        Column(
-            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 22.dp, vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                GlassIconButton(Icons.Default.KeyboardArrowDown, "Minimise player", onClose)
-                Text("NOW PLAYING", Modifier.weight(1f), textAlign = TextAlign.Center, fontFamily = DisplayFont,
-                    fontSize = 12.sp, letterSpacing = 2.sp, color = Color.White.copy(alpha = 0.85f))
-                Spacer(Modifier.size(44.dp))
+        // The cover-art backdrop is the blur source; the controls below sit on top of it as real glass.
+        Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+            val backdrop = art
+            if (backdrop != null) {
+                Image(
+                    bitmap = backdrop,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().blur(48.dp).alpha(if (Build.VERSION.SDK_INT >= 31) 0.55f else 0.25f)
+                )
             }
-            Spacer(Modifier.weight(0.5f))
-            if (video) {
-                Box(
-                    Modifier.fillMaxWidth().aspectRatio(16f / 9f).glass(RoundedCornerShape(24.dp)).padding(5.dp)
-                        .clip(RoundedCornerShape(20.dp)).background(Color.Black)
-                ) {
-                    if (showInlineVideo) {
-                        AndroidView(
-                            factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = false } },
-                            update = { it.player = player },
-                            modifier = Modifier.fillMaxSize()
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x66130B3A), Color(0xD9070A1E)))))
+        }
+        CompositionLocalProvider(LocalHazeState provides hazeState) {
+            Column(
+                Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 22.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    GlassIconButton(Icons.Default.KeyboardArrowDown, "Minimise player", onClose)
+                    Text("NOW PLAYING", Modifier.weight(1f), textAlign = TextAlign.Center, fontFamily = DisplayFont,
+                        fontSize = 12.sp, letterSpacing = 2.sp, color = Color.White.copy(alpha = 0.85f))
+                    Spacer(Modifier.size(44.dp))
+                }
+                Spacer(Modifier.weight(0.5f))
+                if (video) {
+                    Box(
+                        Modifier.fillMaxWidth().aspectRatio(16f / 9f).glass(RoundedCornerShape(24.dp)).padding(5.dp)
+                            .clip(RoundedCornerShape(20.dp)).background(Color.Black)
+                    ) {
+                        if (showInlineVideo) {
+                            AndroidView(
+                                factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = false } },
+                                update = { it.player = player },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                } else {
+                    Box(Modifier.fillMaxWidth(0.78f).aspectRatio(1f).glass(RoundedCornerShape(36.dp), 1.2f).padding(10.dp)) {
+                        MediaArt(
+                            uri = track.uri,
+                            video = false,
+                            accent = accent,
+                            icon = Icons.Default.MusicNote,
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(28.dp),
+                            maxDim = 720,
+                            iconSize = 72.dp
                         )
                     }
                 }
-            } else {
-                Box(Modifier.fillMaxWidth(0.78f).aspectRatio(1f).glass(RoundedCornerShape(36.dp), 1.2f).padding(10.dp)) {
-                    MediaArt(
-                        uri = track.uri,
-                        video = false,
-                        accent = accent,
-                        icon = Icons.Default.MusicNote,
-                        modifier = Modifier.fillMaxSize(),
-                        shape = RoundedCornerShape(28.dp),
-                        maxDim = 720,
-                        iconSize = 72.dp
+                Spacer(Modifier.weight(0.4f))
+                Text(track.name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 20.sp, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "${if (video) "VIDEO" else "AUDIO"}  •  ${snap.index + 1} / ${snap.count.coerceAtLeast(1)}",
+                    color = accent, fontSize = 11.sp, letterSpacing = 1.4.sp, fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(14.dp))
+                Slider(
+                    value = progress,
+                    onValueChange = {
+                        seeking = true
+                        preview = it
+                    },
+                    onValueChangeFinished = {
+                        val total = player.duration
+                        if (total > 0L) player.seekTo((preview * total).toLong())
+                        seeking = false
+                    },
+                    enabled = snap.durationMs > 0L,
+                    colors = SliderDefaults.colors(
+                        thumbColor = accent,
+                        activeTrackColor = accent,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+                    )
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(formatTime(if (seeking) (preview * snap.durationMs).toLong() else snap.positionMs),
+                        color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp)
+                    Text(formatTime(snap.durationMs), color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp)
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    GlassIconButton(Icons.Default.Shuffle, "Shuffle", { player.shuffleModeEnabled = !snap.shuffle },
+                        tint = if (snap.shuffle) accent else Color.White)
+                    GlassIconButton(Icons.Default.SkipPrevious, "Previous", { player.seekToPreviousMediaItem() }, size = 52.dp)
+                    GlassIconButton(
+                        if (snap.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        "Play or pause",
+                        { if (snap.isPlaying) player.pause() else player.play() },
+                        size = 76.dp, tint = InkButton, filled = accent
+                    )
+                    GlassIconButton(Icons.Default.SkipNext, "Next", { player.seekToNextMediaItem() }, size = 52.dp)
+                    GlassIconButton(
+                        if (snap.repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        "Repeat mode",
+                        {
+                            player.repeatMode = when (snap.repeatMode) {
+                                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                else -> Player.REPEAT_MODE_OFF
+                            }
+                        },
+                        tint = if (snap.repeatMode == Player.REPEAT_MODE_OFF) Color.White else accent
                     )
                 }
-            }
-            Spacer(Modifier.weight(0.4f))
-            Text(track.name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 20.sp, maxLines = 2,
-                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "${if (video) "VIDEO" else "AUDIO"}  •  ${snap.index + 1} / ${snap.count.coerceAtLeast(1)}",
-                color = accent, fontSize = 11.sp, letterSpacing = 1.4.sp, fontWeight = FontWeight.SemiBold
-            )
-            Spacer(Modifier.height(14.dp))
-            Slider(
-                value = progress,
-                onValueChange = {
-                    seeking = true
-                    preview = it
-                },
-                onValueChangeFinished = {
-                    val total = player.duration
-                    if (total > 0L) player.seekTo((preview * total).toLong())
-                    seeking = false
-                },
-                enabled = snap.durationMs > 0L,
-                colors = SliderDefaults.colors(
-                    thumbColor = accent,
-                    activeTrackColor = accent,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-                )
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(formatTime(if (seeking) (preview * snap.durationMs).toLong() else snap.positionMs),
-                    color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp)
-                Text(formatTime(snap.durationMs), color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp)
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                GlassIconButton(Icons.Default.Shuffle, "Shuffle", { player.shuffleModeEnabled = !snap.shuffle },
-                    tint = if (snap.shuffle) accent else Color.White)
-                GlassIconButton(Icons.Default.SkipPrevious, "Previous", { player.seekToPreviousMediaItem() }, size = 52.dp)
-                GlassIconButton(
-                    if (snap.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    "Play or pause",
-                    { if (snap.isPlaying) player.pause() else player.play() },
-                    size = 76.dp, tint = InkButton, filled = accent
-                )
-                GlassIconButton(Icons.Default.SkipNext, "Next", { player.seekToNextMediaItem() }, size = 52.dp)
-                GlassIconButton(
-                    if (snap.repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                    "Repeat mode",
-                    {
-                        player.repeatMode = when (snap.repeatMode) {
-                            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                            else -> Player.REPEAT_MODE_OFF
-                        }
-                    },
-                    tint = if (snap.repeatMode == Player.REPEAT_MODE_OFF) Color.White else accent
-                )
-            }
-            Spacer(Modifier.height(16.dp))
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassChip(
-                    "Favorite", accent, active = favorite,
-                    icon = if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    onClick = onFavorite
-                )
-                GlassChip("Playlist", accent, icon = Icons.Default.QueueMusic, onClick = onAddToPlaylist)
-                GlassChip(formatSpeed(snap.speed), accent, active = snap.speed != 1f, icon = Icons.Default.Speed, onClick = onSpeed)
-                GlassChip(sleepLabel ?: "Sleep", accent, active = sleepLabel != null, icon = Icons.Default.Bedtime, onClick = onSleep)
-                if (video) {
-                    GlassChip("Subtitles", accent, icon = Icons.Default.Subtitles, onClick = onSubtitles)
-                    GlassChip("Load .srt/.vtt", accent, icon = Icons.Default.FileOpen, onClick = onLoadSubtitle)
-                    GlassChip("Full screen", accent, icon = Icons.Default.Fullscreen, onClick = onFullscreen)
+                Spacer(Modifier.height(16.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GlassChip(
+                        "Favorite", accent, active = favorite,
+                        icon = if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        onClick = onFavorite
+                    )
+                    GlassChip("Playlist", accent, icon = Icons.Default.QueueMusic, onClick = onAddToPlaylist)
+                    GlassChip(formatSpeed(snap.speed), accent, active = snap.speed != 1f, icon = Icons.Default.Speed, onClick = onSpeed)
+                    GlassChip(sleepLabel ?: "Sleep", accent, active = sleepLabel != null, icon = Icons.Default.Bedtime, onClick = onSleep)
+                    if (video) {
+                        GlassChip("Subtitles", accent, icon = Icons.Default.Subtitles, onClick = onSubtitles)
+                        GlassChip("Load .srt/.vtt", accent, icon = Icons.Default.FileOpen, onClick = onLoadSubtitle)
+                        GlassChip("Full screen", accent, icon = Icons.Default.Fullscreen, onClick = onFullscreen)
+                    }
                 }
+                subtitleName?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Subtitle: $it", color = accent, fontSize = 11.sp, maxLines = 1)
+                }
+                Spacer(Modifier.weight(0.3f))
             }
-            subtitleName?.let {
-                Spacer(Modifier.height(8.dp))
-                Text("Subtitle: $it", color = accent, fontSize = 11.sp, maxLines = 1)
-            }
-            Spacer(Modifier.weight(0.3f))
         }
     }
 }
