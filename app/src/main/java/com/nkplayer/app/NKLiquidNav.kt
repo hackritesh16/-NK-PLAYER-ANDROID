@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.chrisbanes.haze.hazeEffect
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -70,7 +71,8 @@ data class NKNavItem(val label: String, val icon: ImageVector)
 /**
  * Floating liquid-glass bottom navigation.
  *
- * - Glass pill with a gradient rim and a soft light sheen.
+ * - Glass pill with a gradient rim and a soft light sheen. When LocalHazeState is provided, the content
+ *   scrolling behind the bar is really blurred (Android 12+).
  * - A liquid blob marks the active tab. Touch the bar and the blob swells and follows the finger;
  *   a slower "tail" lags behind, so the blob stretches, pinches in the middle and snaps back like a
  *   water droplet. On release it settles on the nearest tab with a little wobble.
@@ -86,6 +88,7 @@ fun NKLiquidNavBar(
 ) {
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
+    val haze = LocalHazeState.current
     val barShape = RoundedCornerShape(36.dp)
     val count = items.size.coerceAtLeast(1)
     val padPx = with(density) { 8.dp.toPx() }
@@ -149,7 +152,16 @@ fun NKLiquidNavBar(
                 spotColor = Color.Black
             )
             .clip(barShape)
-            .background(Color(0xCC0B1220))
+            .let { base ->
+                if (haze != null) {
+                    base.hazeEffect(state = haze) {
+                        blurRadius = 26.dp
+                        noiseFactor = 0.05f
+                    }
+                } else base
+            }
+            // Lighter tint when the real blur is behind it, so the blur actually shows through.
+            .background(if (haze != null) Color(0x4D0B1220) else Color(0xCC0B1220))
             .background(
                 Brush.verticalGradient(
                     listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.04f))
