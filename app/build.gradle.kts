@@ -75,6 +75,9 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.5.1")
     implementation("androidx.media3:media3-session:1.5.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // Real background blur for glass bars/buttons (Android 12+; older phones keep the translucent look).
+    // 1.2.x is the line built for Compose 1.7 / Kotlin 2.0, which this project uses.
+    implementation("dev.chrisbanes.haze:haze:1.2.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
 }

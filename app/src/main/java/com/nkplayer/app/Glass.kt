@@ -24,6 +24,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
+import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -169,24 +171,39 @@ fun GlassBackground(p: NkPalette, content: @Composable BoxScope.() -> Unit) {
     )
 }
 
-/** Frosted-glass surface: translucent white gradient, bright hairline border on the top-left edge. */
-fun Modifier.glass(shape: Shape = RoundedCornerShape(22.dp), strength: Float = 1f): Modifier = this
-    .clip(shape)
-    .background(
-        Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = (0.17f * strength).coerceAtMost(0.5f)),
-                Color.White.copy(alpha = (0.06f * strength).coerceAtMost(0.3f))
+/**
+ * Frosted-glass surface: translucent white gradient, bright hairline border on the top-left edge.
+ * Where LocalHazeState is provided (floating bars, mini player, now-playing controls) the area behind
+ * the surface is also blurred, so it reads as real glass.
+ */
+fun Modifier.glass(shape: Shape = RoundedCornerShape(22.dp), strength: Float = 1f): Modifier = composed {
+    val haze = LocalHazeState.current
+    this
+        .clip(shape)
+        .let { base ->
+            if (haze != null) {
+                base.hazeEffect(state = haze) {
+                    blurRadius = 22.dp
+                    noiseFactor = 0.05f
+                }
+            } else base
+        }
+        .background(
+            Brush.verticalGradient(
+                listOf(
+                    Color.White.copy(alpha = (0.17f * strength).coerceAtMost(0.5f)),
+                    Color.White.copy(alpha = (0.06f * strength).coerceAtMost(0.3f))
+                )
             )
         )
-    )
-    .border(
-        1.dp,
-        Brush.linearGradient(
-            listOf(Color.White.copy(alpha = 0.50f), Color.White.copy(alpha = 0.05f), Color.White.copy(alpha = 0.22f))
-        ),
-        shape
-    )
+        .border(
+            1.dp,
+            Brush.linearGradient(
+                listOf(Color.White.copy(alpha = 0.50f), Color.White.copy(alpha = 0.05f), Color.White.copy(alpha = 0.22f))
+            ),
+            shape
+        )
+}
 
 @Composable
 fun GlassCard(
@@ -249,8 +266,17 @@ fun GlassChip(
     onClick: (() -> Unit)? = null
 ) {
     val shape = RoundedCornerShape(50)
+    val haze = LocalHazeState.current
     val look = Modifier
         .clip(shape)
+        .let { base ->
+            if (haze != null) {
+                base.hazeEffect(state = haze) {
+                    blurRadius = 18.dp
+                    noiseFactor = 0.05f
+                }
+            } else base
+        }
         .background(if (active) accent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.10f))
         .border(1.dp, if (active) accent.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.22f), shape)
         .let { if (onClick != null) it.clickable(onClick = onClick) else it }
